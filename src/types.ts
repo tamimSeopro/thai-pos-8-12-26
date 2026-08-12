@@ -28,6 +28,7 @@ export interface User {
   permissions: PermissionFlags;
   isActive: boolean;
   twoFactorEnabled?: boolean;
+  twoFactorSecret?: string;
   createdAt: string;
 }
 

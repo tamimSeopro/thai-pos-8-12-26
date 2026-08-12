@@ -11,9 +11,12 @@ import {
   Smartphone,
   RefreshCw,
   Info,
+  QrCode,
+  CheckCircle,
 } from 'lucide-react';
 import { usePermissions } from '../../context/PermissionsContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { get2FASetupDetails } from '../../lib/authService';
 
 export const LoginModal: React.FC = () => {
   const { loginWithCredentials, verify2FA } = usePermissions();
@@ -24,9 +27,16 @@ export const LoginModal: React.FC = () => {
   const [step, setStep] = useState<'credentials' | '2fa' | 'recovery'>('credentials');
   
   const [tempUserId, setTempUserId] = useState<string | null>(null);
-  const [generatedOtp, setGeneratedOtp] = useState<string | null>(null);
   const [twoFactorCode, setTwoFactorCode] = useState('');
   const [recoveryCode, setRecoveryCode] = useState('');
+
+  // Google Authenticator QR setup
+  const [showQrSetup, setShowQrSetup] = useState(false);
+  const [qrDetails, setQrDetails] = useState<{
+    secret: string;
+    qrCodeUrl: string;
+    username: string;
+  } | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,6 +59,17 @@ export const LoginModal: React.FC = () => {
     return () => clearInterval(interval);
   }, [lockoutTimer]);
 
+  // Load Google Authenticator QR Details when entering 2FA step
+  useEffect(() => {
+    if (step === '2fa' && tempUserId) {
+      get2FASetupDetails(tempUserId).then((details) => {
+        if (details) {
+          setQrDetails(details);
+        }
+      });
+    }
+  }, [step, tempUserId]);
+
   const handleCredentialsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -58,11 +79,9 @@ export const LoginModal: React.FC = () => {
       const result = await loginWithCredentials(username, password);
 
       if (result.success) {
-        // Logged in successfully!
         setIsLoading(false);
       } else if (result.requires2FA && result.tempUserId) {
         setTempUserId(result.tempUserId);
-        setGeneratedOtp(result.generatedOtp || null);
         setStep('2fa');
         setIsLoading(false);
       } else if (result.isLocked) {
@@ -84,7 +103,7 @@ export const LoginModal: React.FC = () => {
     e.preventDefault();
     if (!tempUserId) return;
     if (twoFactorCode.length < 6) {
-      setError('অনুগ্রহ করে সঠিক ৬-ডিজিটের ভেরিফিকেশন কোড দিন');
+      setError('Google Authenticator থেকে সঠিক ৬-ডিজিটের নিরাপত্তা কোড দিন');
       return;
     }
     setError(null);
@@ -106,7 +125,7 @@ export const LoginModal: React.FC = () => {
     e.preventDefault();
     if (!tempUserId) return;
     if (recoveryCode.length < 8) {
-      setError('সঠিক ৮-ডিজিটের রিকভারি কোড দিন (যেমন: REC-11223344)');
+      setError('সঠিক ৮-ডিজিটের রিকভারি কোড দিন (যেমন: REC-99887766)');
       return;
     }
     setError(null);
@@ -122,13 +141,6 @@ export const LoginModal: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const fillPreset = (u: string, p: string) => {
-    setUsername(u);
-    setPassword(p);
-    setError(null);
-    setLockoutMsg(null);
   };
 
   return (
@@ -258,21 +270,65 @@ export const LoginModal: React.FC = () => {
 
           {step === '2fa' && (
             <form onSubmit={handle2FASubmit} className="space-y-4">
-              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-center">
-                <KeyRound className="w-8 h-8 text-amber-400 mx-auto mb-2" />
-                <h4 className="text-xs font-bold text-slate-200">{t('twoFactorTitle')}</h4>
-                <p className="text-[11px] text-slate-400 mt-1">{t('twoFactorSubtitle')}</p>
-                {generatedOtp && (
-                  <div className="mt-3 p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-300 font-mono text-xs flex items-center justify-center gap-2">
-                    <Smartphone className="w-4 h-4 text-amber-400" />
-                    <span>টেস্ট OTP কোড: <strong>{generatedOtp}</strong></span>
+              <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl text-center space-y-2">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <h4 className="text-xs font-bold text-slate-100">Google Authenticator ২FA নিরাপত্তা</h4>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  আপনার মোবাইল থেকে Google Authenticator / Authy অ্যাপ খুলে ৬-ডিজিটের নিরাপত্তা কোড লিখুন।
+                </p>
+
+                {/* Toggle QR Code Setup View */}
+                {qrDetails && (
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowQrSetup(!showQrSetup)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-emerald-400 hover:text-emerald-300 text-[11px] font-bold transition"
+                    >
+                      <QrCode className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>{showQrSetup ? 'QR কোড লুকান' : 'QR কোড স্ক্যান করুন (Scan QR)'}</span>
+                    </button>
                   </div>
                 )}
               </div>
 
+              {/* QR Code Setup Modal / Card view */}
+              {showQrSetup && qrDetails && (
+                <div className="p-4 bg-slate-950 border border-emerald-500/30 rounded-xl text-center space-y-3 animate-fadeIn">
+                  <p className="text-[11px] font-bold text-emerald-400">
+                    Google Authenticator অ্যাপ দিয়ে নিচের QR Code স্ক্যান করুন:
+                  </p>
+
+                  {qrDetails.qrCodeUrl ? (
+                    <div className="p-2 bg-white rounded-xl inline-block shadow-lg mx-auto">
+                      <img
+                        src={qrDetails.qrCodeUrl}
+                        alt="Google Authenticator QR Code"
+                        className="w-44 h-44 object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-44 h-44 bg-slate-900 rounded-xl flex items-center justify-center mx-auto text-xs text-slate-500">
+                      QR কোড লোড হচ্ছে...
+                    </div>
+                  )}
+
+                  <div className="text-[11px] text-slate-300 bg-slate-900 p-2.5 rounded-lg border border-slate-800 space-y-1">
+                    <span className="block text-[10px] text-slate-500 uppercase font-bold">
+                      ম্যানুয়াল সিক্রেট কী (Secret Key)
+                    </span>
+                    <span className="font-mono font-bold text-amber-300 tracking-wider text-xs selection:bg-amber-500 selection:text-slate-950">
+                      {qrDetails.secret}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                  {t('verificationCode')}
+                  ভেরিফিকেশন কোড (৬-ডিজিট)
                 </label>
                 <input
                   type="text"
@@ -280,14 +336,14 @@ export const LoginModal: React.FC = () => {
                   value={twoFactorCode}
                   onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
                   placeholder="1 2 3 4 5 6"
-                  className="w-full text-center text-lg font-mono tracking-widest bg-slate-950 border border-slate-800 rounded-xl py-2 text-emerald-400 focus:outline-none focus:border-emerald-500"
+                  className="w-full text-center text-lg font-mono tracking-widest bg-slate-950 border border-slate-800 rounded-xl py-2.5 text-emerald-400 focus:outline-none focus:border-emerald-500 font-bold"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs py-2.5 rounded-xl transition shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2"
+                className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs py-3 rounded-xl transition shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2"
               >
                 {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : t('verifyButton')}
               </button>
@@ -296,7 +352,7 @@ export const LoginModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setStep('recovery')}
-                  className="text-[11px] text-emerald-400 hover:underline"
+                  className="text-[11px] text-emerald-400 hover:underline font-medium"
                 >
                   {t('useRecoveryCode')}
                 </button>
@@ -318,7 +374,7 @@ export const LoginModal: React.FC = () => {
                   value={recoveryCode}
                   onChange={(e) => setRecoveryCode(e.target.value)}
                   placeholder="REC-XXXXXX"
-                  className="w-full text-center text-sm font-mono tracking-widest bg-slate-950 border border-slate-800 rounded-xl py-2.5 text-slate-100 focus:outline-none focus:border-emerald-500"
+                  className="w-full text-center text-sm font-mono tracking-widest bg-slate-950 border border-slate-800 rounded-xl py-2.5 text-slate-100 focus:outline-none focus:border-emerald-500 uppercase font-bold"
                 />
               </div>
 
@@ -331,38 +387,9 @@ export const LoginModal: React.FC = () => {
               </button>
             </form>
           )}
-
-          {/* Quick Fill Test Accounts */}
-          <div className="mt-6 pt-4 border-t border-slate-800/80">
-            <p className="text-[11px] font-semibold text-slate-400 mb-2">
-              টেস্ট একাউন্ট বাছাই করুন (Quick Presets):
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => fillPreset('superadmin', 'admin123')}
-                className="p-2 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 rounded-xl text-[10px] font-bold text-center transition"
-              >
-                সুপার এডমিন
-              </button>
-              <button
-                type="button"
-                onClick={() => fillPreset('storeadmin', 'admin123')}
-                className="p-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 rounded-xl text-[10px] font-bold text-center transition"
-              >
-                স্টোর এডমিন
-              </button>
-              <button
-                type="button"
-                onClick={() => fillPreset('rahim_staff', 'staff123')}
-                className="p-2 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-300 rounded-xl text-[10px] font-bold text-center transition"
-              >
-                স্টাফ / বিক্রয়কর্মী
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     </div>
   );
 };
+

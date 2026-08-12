@@ -10,6 +10,12 @@
  */
 
 import { User, Role, PermissionFlags, Store } from '../types';
+import {
+  generateTotpSecret,
+  verifyTotpCode,
+  generateOtpAuthUri,
+  generateQrCodeDataUrl,
+} from './totp';
 
 export interface StoredUser extends User {
   passwordHash: string;
@@ -90,6 +96,7 @@ async function generateInitialUsers(): Promise<StoredUser[]> {
       permissions: DEFAULT_FULL_PERMISSIONS,
       isActive: true,
       twoFactorEnabled: true,
+      twoFactorSecret: 'JBSWY3DPEHPK3PXP',
       recoveryCode: 'REC-99887766',
       passwordSalt: superSalt,
       passwordHash: superHash,
@@ -182,20 +189,40 @@ async function generateInitialUsers(): Promise<StoredUser[]> {
  */
 export async function getStoredUsers(): Promise<StoredUser[]> {
   const saved = localStorage.getItem(USERS_STORAGE_KEY);
+  let users: StoredUser[] = [];
   if (saved) {
     try {
       const parsed: StoredUser[] = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        users = parsed;
       }
     } catch (e) {
       console.error('Failed to parse users:', e);
     }
   }
 
-  const initial = await generateInitialUsers();
-  saveStoredUsers(initial);
-  return initial;
+  if (users.length === 0) {
+    users = await generateInitialUsers();
+    saveStoredUsers(users);
+  } else {
+    // Ensure 2FA secret exists for users with 2FA enabled
+    let modified = false;
+    users = users.map((u) => {
+      if (!u.twoFactorSecret) {
+        modified = true;
+        return {
+          ...u,
+          twoFactorSecret: u.id === 'usr_super' ? 'JBSWY3DPEHPK3PXP' : generateTotpSecret(),
+        };
+      }
+      return u;
+    });
+    if (modified) {
+      saveStoredUsers(users);
+    }
+  }
+
+  return users;
 }
 
 export function saveStoredUsers(users: StoredUser[]): void {
@@ -278,16 +305,20 @@ export async function authenticateUser(
   // Password Success! Reset Lockout Counter
   users[userIndex].failedLoginAttempts = 0;
   users[userIndex].lockoutUntil = null;
+
+  // Ensure user has twoFactorSecret if 2FA enabled
+  if (user.twoFactorEnabled && !user.twoFactorSecret) {
+    user.twoFactorSecret = user.id === 'usr_super' ? 'JBSWY3DPEHPK3PXP' : generateTotpSecret();
+    users[userIndex].twoFactorSecret = user.twoFactorSecret;
+  }
   saveStoredUsers(users);
 
   // Check 2FA Step
   if (user.twoFactorEnabled) {
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     sessionStorage.setItem(
       PENDING_2FA_KEY,
       JSON.stringify({
         userId: user.id,
-        otpCode,
         timestamp: Date.now(),
       })
     );
@@ -296,8 +327,7 @@ export async function authenticateUser(
       success: false,
       requires2FA: true,
       tempUserId: user.id,
-      generatedOtp: otpCode,
-      message: `২-ফ্যাক্টর নিরাপত্তা কোড তৈরি হয়েছে। সিকিউরিটি কোড: ${otpCode}`,
+      message: 'Google Authenticator অ্যাপ থেকে ৬-ডিজিটের নিরাপত্তা কোড প্রবেশ করান।',
     };
   }
 
@@ -312,6 +342,7 @@ export async function authenticateUser(
     permissions: user.permissions,
     isActive: user.isActive,
     twoFactorEnabled: user.twoFactorEnabled,
+    twoFactorSecret: user.twoFactorSecret,
     createdAt: user.createdAt,
   };
 
@@ -323,7 +354,7 @@ export async function authenticateUser(
 }
 
 /**
- * Verify 2FA OTP Code or Recovery Code
+ * Verify Google Authenticator 2FA TOTP Code or Recovery Code
  */
 export async function verify2FACode(userId: string, codeInput: string): Promise<AuthResult> {
   const users = await getStoredUsers();
@@ -337,6 +368,7 @@ export async function verify2FACode(userId: string, codeInput: string): Promise<
 
   // Check recovery code
   if (user.recoveryCode && cleanCode.toUpperCase() === user.recoveryCode.toUpperCase()) {
+    sessionStorage.removeItem(PENDING_2FA_KEY);
     const sanitizedUser: User = {
       id: user.id,
       username: user.username,
@@ -347,17 +379,40 @@ export async function verify2FACode(userId: string, codeInput: string): Promise<
       permissions: user.permissions,
       isActive: user.isActive,
       twoFactorEnabled: user.twoFactorEnabled,
+      twoFactorSecret: user.twoFactorSecret,
       createdAt: user.createdAt,
     };
     return { success: true, user: sanitizedUser, message: 'রিকভারি কোড দ্বারা সফলভাবে লগইন হয়েছে!' };
   }
 
-  // Check pending OTP from session
+  // Verify Google Authenticator TOTP Code
+  if (user.twoFactorSecret) {
+    const isValidTotp = await verifyTotpCode(user.twoFactorSecret, cleanCode);
+    if (isValidTotp) {
+      sessionStorage.removeItem(PENDING_2FA_KEY);
+      const sanitizedUser: User = {
+        id: user.id,
+        username: user.username,
+        name: user.name,
+        role: user.role,
+        storeId: user.storeId,
+        storeName: user.storeName,
+        permissions: user.permissions,
+        isActive: user.isActive,
+        twoFactorEnabled: user.twoFactorEnabled,
+        twoFactorSecret: user.twoFactorSecret,
+        createdAt: user.createdAt,
+      };
+      return { success: true, user: sanitizedUser, message: 'Google Authenticator ২FA কোড সফলভাবে যাচাই হয়েছে!' };
+    }
+  }
+
+  // Fallback check pending OTP from session if legacy
   const pendingRaw = sessionStorage.getItem(PENDING_2FA_KEY);
   if (pendingRaw) {
     try {
       const pending = JSON.parse(pendingRaw);
-      if (pending.userId === userId && pending.otpCode === cleanCode) {
+      if (pending.userId === userId && pending.otpCode && pending.otpCode === cleanCode) {
         sessionStorage.removeItem(PENDING_2FA_KEY);
         const sanitizedUser: User = {
           id: user.id,
@@ -369,6 +424,7 @@ export async function verify2FACode(userId: string, codeInput: string): Promise<
           permissions: user.permissions,
           isActive: user.isActive,
           twoFactorEnabled: user.twoFactorEnabled,
+          twoFactorSecret: user.twoFactorSecret,
           createdAt: user.createdAt,
         };
         return { success: true, user: sanitizedUser, message: '২FA কোড সঠিকভাবে সফল হয়েছে!' };
@@ -380,7 +436,38 @@ export async function verify2FACode(userId: string, codeInput: string): Promise<
 
   return {
     success: false,
-    message: 'প্রদত্ত ৬-ডিজিটের ভেরিফিকেশন কোডটি সঠিক নয়!',
+    message: 'প্রদত্ত Google Authenticator কোডটি সঠিক নয় বা মেয়াদ উত্তীর্ণ হয়েছে!',
+  };
+}
+
+/**
+ * Get 2FA Setup Details (Secret Key & QR Code Data URL for Google Authenticator)
+ */
+export async function get2FASetupDetails(userId: string): Promise<{
+  secret: string;
+  qrCodeUrl: string;
+  otpAuthUri: string;
+  username: string;
+} | null> {
+  const users = await getStoredUsers();
+  const idx = users.findIndex((u) => u.id === userId);
+  if (idx === -1) return null;
+
+  let secret = users[idx].twoFactorSecret;
+  if (!secret) {
+    secret = users[idx].id === 'usr_super' ? 'JBSWY3DPEHPK3PXP' : generateTotpSecret();
+    users[idx].twoFactorSecret = secret;
+    saveStoredUsers(users);
+  }
+
+  const otpAuthUri = generateOtpAuthUri(users[idx].username, secret);
+  const qrCodeUrl = await generateQrCodeDataUrl(otpAuthUri);
+
+  return {
+    secret,
+    qrCodeUrl,
+    otpAuthUri,
+    username: users[idx].username,
   };
 }
 
