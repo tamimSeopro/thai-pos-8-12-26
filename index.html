@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="bn">
+  <head>
+    <script>
+      (function() {
+        function forceSettable(obj, prop) {
+          if (!obj) return;
+          try {
+            var val = obj[prop];
+            try {
+              if (typeof val === 'function') {
+                val = val.bind(obj);
+              }
+            } catch (_) {}
+
+            var descriptor = {
+              get: function() {
+                return val;
+              },
+              set: function(newVal) {
+                val = newVal;
+              },
+              configurable: true,
+              enumerable: true
+            };
+
+            try {
+              Object.defineProperty(obj, prop, descriptor);
+            } catch (e1) {
+              try {
+                var proto = Object.getPrototypeOf(obj);
+                if (proto) {
+                  Object.defineProperty(proto, prop, descriptor);
+                }
+              } catch (e2) {}
+            }
+          } catch (e) {}
+        }
+
+        var targets = [
+          typeof window !== 'undefined' ? window : null,
+          typeof globalThis !== 'undefined' ? globalThis : null,
+          typeof self !== 'undefined' ? self : null,
+          typeof Window !== 'undefined' && Window.prototype ? Window.prototype : null
+        ];
+
+        var props = ['fetch', 'FormData', 'Headers', 'Request', 'Response', 'XMLHttpRequest', 'sendBeacon'];
+        for (var i = 0; i < targets.length; i++) {
+          if (!targets[i]) continue;
+          for (var j = 0; j < props.length; j++) {
+            forceSettable(targets[i], props[j]);
+          }
+        }
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>থাই গ্লাস POS (Thai Glass POS)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="description" content="Bangla POS & Inventory Dashboard for Thai Glass & Aluminum Shops" />
+    <link rel="manifest" href="/manifest.json" />
+  </head>
+  <body class="bg-slate-950 text-slate-100 font-sans antialiased selection:bg-emerald-500/30 selection:text-emerald-300">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

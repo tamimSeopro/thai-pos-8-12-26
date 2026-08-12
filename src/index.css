@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Hind Siliguri', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Print Styles for Memo & Financial Report Printing */
+@media print {
+  @page {
+    margin: 10mm;
+    size: auto;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* Hide navigation, sidebars, headers, backgrounds, non-printable buttons */
+  header,
+  aside,
+  nav,
+  .no-print,
+  .no-print * {
+    display: none !important;
+  }
+
+  /* Reset modal containers so content flows naturally for multi-page printing */
+  .fixed,
+  .backdrop-blur-sm,
+  .no-print-modal-container {
+    position: static !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    max-height: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    width: 100% !important;
+  }
+
+  .printable-memo,
+  .printable-financial-report,
+  .printable-invoice {
+    display: block !important;
+    visibility: visible !important;
+    position: relative !important;
+    width: 100% !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 10px !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Force all child elements in print reports to black text and white/transparent backgrounds */
+  .printable-memo *,
+  .printable-financial-report *,
+  .printable-invoice * {
+    color: #000000 !important;
+    background-color: transparent !important;
+    text-shadow: none !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  /* Soft light gray background for headers and metric cards in print mode */
+  .printable-memo th,
+  .printable-financial-report th,
+  .printable-invoice th,
+  .printable-memo .bg-slate-900,
+  .printable-financial-report .bg-slate-900,
+  .printable-invoice .bg-slate-900,
+  .printable-memo .bg-slate-950,
+  .printable-financial-report .bg-slate-950,
+  .printable-invoice .bg-slate-950,
+  .printable-memo .bg-slate-800,
+  .printable-financial-report .bg-slate-800,
+  .printable-invoice .bg-slate-800,
+  .printable-memo .bg-slate-50,
+  .printable-financial-report .bg-slate-50,
+  .printable-invoice .bg-slate-50,
+  .printable-memo .bg-slate-100,
+  .printable-financial-report .bg-slate-100,
+  .printable-invoice .bg-slate-100 {
+    background-color: #f8fafc !important;
+    color: #000000 !important;
+  }
+}
