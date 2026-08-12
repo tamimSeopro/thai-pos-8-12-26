@@ -54,11 +54,16 @@ const MainLayout: React.FC = () => {
     }
   };
 
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center font-sans">
+        <LoginModal />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950">
-      {/* If not logged in, render LoginModal over dark backdrop */}
-      {!currentUser && <LoginModal />}
-
       {/* Main Shell */}
       <div className="flex flex-1 relative">
         {/* Sidebar */}

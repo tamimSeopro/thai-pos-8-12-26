@@ -19,8 +19,8 @@ export const LoginModal: React.FC = () => {
   const { loginWithCredentials, verify2FA } = usePermissions();
   const { language, toggleLanguage, t } = useLanguage();
 
-  const [username, setUsername] = useState('storeadmin');
-  const [password, setPassword] = useState('admin123');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [step, setStep] = useState<'credentials' | '2fa' | 'recovery'>('credentials');
   
   const [tempUserId, setTempUserId] = useState<string | null>(null);

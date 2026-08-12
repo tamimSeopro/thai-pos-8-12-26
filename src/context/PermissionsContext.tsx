@@ -96,8 +96,8 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         console.error(e);
       }
     }
-    // Default logged in user: Store Admin for instant working demo
-    return DEFAULT_MOCK_USERS[1];
+    // Default unauthenticated so user must log in first
+    return null;
   });
 
   const [impersonatedStore, setImpersonatedStore] = useState<Store | null>(() => {
