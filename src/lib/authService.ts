@@ -655,6 +655,7 @@ export async function createStoreAndAdminAccount(
     phone: string;
     address: string;
     adminUsername: string;
+    require2FA?: boolean;
   },
   passwordInput: string,
   superAdmin: User
@@ -689,6 +690,8 @@ export async function createStoreAndAdminAccount(
   const salt = generateSalt();
   const hash = await hashPassword(passwordInput, salt);
 
+  const is2FA = storeParams.require2FA ?? true;
+
   const newAdminUser: StoredUser = {
     id: 'usr_admin_' + Date.now(),
     username: cleanUsername,
@@ -698,7 +701,8 @@ export async function createStoreAndAdminAccount(
     storeName: storeParams.storeName,
     permissions: DEFAULT_FULL_PERMISSIONS,
     isActive: true,
-    twoFactorEnabled: true,
+    twoFactorEnabled: is2FA,
+    twoFactorSecret: generateTotpSecret(),
     recoveryCode: 'REC-' + Math.floor(10000000 + Math.random() * 90000000),
     passwordSalt: salt,
     passwordHash: hash,

@@ -29,6 +29,7 @@ export interface User {
   isActive: boolean;
   twoFactorEnabled?: boolean;
   twoFactorSecret?: string;
+  recoveryCode?: string;
   createdAt: string;
 }
 

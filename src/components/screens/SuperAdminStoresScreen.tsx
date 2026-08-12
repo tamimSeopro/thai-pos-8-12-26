@@ -20,6 +20,8 @@ import {
   Unlock,
   LockKeyhole,
   Users,
+  Smartphone,
+  Sparkles,
 } from 'lucide-react';
 import { Store } from '../../types';
 import { api } from '../../lib/api';
@@ -34,7 +36,7 @@ import {
 import { generateSupabaseRLSSQL, getSupabaseConfig } from '../../lib/supabaseClient';
 
 export const SuperAdminStoresScreen: React.FC = () => {
-  const { enterSupportMode, currentUser, resetPassword, unlockAccount } = usePermissions();
+  const { enterSupportMode, currentUser, resetPassword, unlockAccount, toggle2FA } = usePermissions();
   const { t } = useLanguage();
 
   const [stores, setStores] = useState<Store[]>([]);
@@ -49,6 +51,7 @@ export const SuperAdminStoresScreen: React.FC = () => {
   const [address, setAddress] = useState('');
   const [adminUsername, setAdminUsername] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
+  const [require2FA, setRequire2FA] = useState(true);
 
   // Password reset modal state
   const [resetModalUser, setResetModalUser] = useState<StoredUser | null>(null);
@@ -57,6 +60,16 @@ export const SuperAdminStoresScreen: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedSql, setCopiedSql] = useState(false);
+
+  // Summary state for newly created store credentials
+  const [createdCredentials, setCreatedCredentials] = useState<{
+    storeName: string;
+    adminUsername: string;
+    passwordInput: string;
+    recoveryCode: string;
+    require2FA: boolean;
+  } | null>(null);
+  const [copiedCreds, setCopiedCreds] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -76,6 +89,24 @@ export const SuperAdminStoresScreen: React.FC = () => {
     loadData();
   }, []);
 
+  const generateCleanUsername = () => {
+    if (!storeName) return;
+    const clean = storeName
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+      .slice(0, 12);
+    setAdminUsername(`admin_${clean || 'shop'}`);
+  };
+
+  const generateRandomPassword = () => {
+    const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+    let rand = '';
+    for (let i = 0; i < 8; i++) {
+      rand += chars[Math.floor(Math.random() * chars.length)];
+    }
+    setAdminPassword(`pass_${rand}`);
+  };
+
   const handleCreateStore = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!storeName || !adminUsername || !adminPassword || !currentUser) return;
@@ -88,6 +119,7 @@ export const SuperAdminStoresScreen: React.FC = () => {
         phone,
         address,
         adminUsername,
+        require2FA,
       },
       adminPassword,
       currentUser
@@ -95,6 +127,17 @@ export const SuperAdminStoresScreen: React.FC = () => {
 
     if (res.success && res.newStore) {
       setStores([res.newStore, ...stores]);
+
+      // Open Created Credentials Summary Modal
+      setCreatedCredentials({
+        storeName: res.newStore.name,
+        adminUsername: adminUsername.trim().toLowerCase(),
+        passwordInput: adminPassword,
+        recoveryCode: res.adminUser?.recoveryCode || 'N/A',
+        require2FA,
+      });
+
+      // Clear Form
       setStoreName('');
       setOwnerName('');
       setPhone('');
@@ -104,10 +147,18 @@ export const SuperAdminStoresScreen: React.FC = () => {
 
       setSuccessMsg(`"${res.newStore.name}" ও শপ এডমিন একাউন্ট এনক্রিপ্ট করা পাসওয়ার্ড সহ সফলভাবে তৈরি হয়েছে!`);
       await loadData();
-      setTimeout(() => setSuccessMsg(null), 4000);
+      setTimeout(() => setSuccessMsg(null), 5000);
     } else {
       setErrorMsg(res.message || 'শপ তৈরিতে সমস্যা হয়েছে');
     }
+  };
+
+  const copyCredentialsToClipboard = () => {
+    if (!createdCredentials) return;
+    const text = `=== Thai Glass POS Store Credentials ===\nStore: ${createdCredentials.storeName}\nUsername: ${createdCredentials.adminUsername}\nPassword: ${createdCredentials.passwordInput}\n2FA Required: ${createdCredentials.require2FA ? 'Yes (Google Authenticator)' : 'No'}\nRecovery Code: ${createdCredentials.recoveryCode}\n========================================`;
+    navigator.clipboard.writeText(text);
+    setCopiedCreds(true);
+    setTimeout(() => setCopiedCreds(false), 3000);
   };
 
   const handleToggleSuspend = async (storeId: string) => {
@@ -151,6 +202,15 @@ export const SuperAdminStoresScreen: React.FC = () => {
       setSuccessMsg(res.message);
       await loadData();
       setTimeout(() => setSuccessMsg(null), 4000);
+    }
+  };
+
+  const handleToggle2FAUser = async (userId: string, currentVal: boolean) => {
+    const res = await toggle2FA(userId, !currentVal);
+    if (res.success) {
+      setSuccessMsg(res.message);
+      await loadData();
+      setTimeout(() => setSuccessMsg(null), 3000);
     }
   };
 
@@ -312,9 +372,19 @@ export const SuperAdminStoresScreen: React.FC = () => {
               </div>
 
               <div className="pt-2 border-t border-slate-800">
-                <label className="block text-xs font-medium text-slate-300 mb-1">
-                  {t('storeAdminUsername')}*
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-slate-300">
+                    {t('storeAdminUsername')}*
+                  </label>
+                  <button
+                    type="button"
+                    onClick={generateCleanUsername}
+                    className="text-[10px] text-emerald-400 hover:underline font-semibold flex items-center gap-1"
+                  >
+                    <Sparkles className="w-3 h-3 text-emerald-400" />
+                    <span>অটো তৈরি (Auto)</span>
+                  </button>
+                </div>
                 <input
                   type="text"
                   value={adminUsername}
@@ -326,18 +396,42 @@ export const SuperAdminStoresScreen: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
-                  {t('storeAdminPassword')}*
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-slate-300">
+                    {t('storeAdminPassword')}*
+                  </label>
+                  <button
+                    type="button"
+                    onClick={generateRandomPassword}
+                    className="text-[10px] text-amber-400 hover:underline font-semibold flex items-center gap-1"
+                  >
+                    <Sparkles className="w-3 h-3 text-amber-400" />
+                    <span>র্যান্ডম পাসওয়ার্ড</span>
+                  </button>
+                </div>
                 <input
-                  type="password"
+                  type="text"
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
                   required
                   minLength={6}
                   placeholder="•••••••• (অন্তত ৬ অক্ষর)"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 font-mono focus:outline-none focus:border-emerald-500"
                 />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1.5 pb-1">
+                <input
+                  type="checkbox"
+                  id="admin2faCheck"
+                  checked={require2FA}
+                  onChange={(e) => setRequire2FA(e.target.checked)}
+                  className="w-4 h-4 rounded bg-slate-950 border-slate-700 text-emerald-500"
+                />
+                <label htmlFor="admin2faCheck" className="text-xs text-slate-300 cursor-pointer flex items-center gap-1.5">
+                  <Smartphone className="w-3.5 h-3.5 text-amber-400" />
+                  <span>এই শপ এডমিনের জন্য Google Authenticator (2FA) বাধ্যতামূলক করুন</span>
+                </label>
               </div>
 
               <button
@@ -383,7 +477,7 @@ export const SuperAdminStoresScreen: React.FC = () => {
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div>
+                        <div className="w-full">
                           <div className="flex items-center gap-2">
                             <h4 className="text-sm font-bold text-slate-100">{store.name}</h4>
                             {store.isSuspended ? (
@@ -411,6 +505,28 @@ export const SuperAdminStoresScreen: React.FC = () => {
                               <span className="truncate">{store.address || 'N/A'}</span>
                             </p>
                           </div>
+
+                          {/* 2FA Status & Toggle for Store Admin */}
+                          {adminUser && (
+                            <div className="mt-2.5 pt-2 border-t border-slate-800/60 flex items-center justify-between">
+                              <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                                <Smartphone className="w-3.5 h-3.5 text-amber-400" />
+                                <span>Google 2FA সিকিউরিটি:</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleToggle2FAUser(adminUser.id, Boolean(adminUser.twoFactorEnabled))}
+                                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition flex items-center gap-1 ${
+                                  adminUser.twoFactorEnabled
+                                    ? 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
+                                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
+                                }`}
+                              >
+                                <span>{adminUser.twoFactorEnabled ? 'চালু (Enabled)' : 'বন্ধ (Disabled)'}</span>
+                                <span className="text-[9px] underline opacity-80">(টগল করুন)</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -503,7 +619,7 @@ export const SuperAdminStoresScreen: React.FC = () => {
                     শপ: <strong>{usr.storeName || 'Global'}</strong>
                   </p>
 
-                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+                  <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between flex-wrap gap-1">
                     {isLocked ? (
                       <button
                         onClick={() => handleUnlockUser(usr.id)}
@@ -517,11 +633,25 @@ export const SuperAdminStoresScreen: React.FC = () => {
                     )}
 
                     <button
+                      type="button"
+                      onClick={() => handleToggle2FAUser(usr.id, Boolean(usr.twoFactorEnabled))}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition flex items-center gap-1 ${
+                        usr.twoFactorEnabled
+                          ? 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
+                          : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
+                      }`}
+                      title="Google Authenticator 2FA সিকিউরিটি পারমিশন"
+                    >
+                      <Smartphone className="w-3 h-3 text-amber-400" />
+                      <span>2FA: {usr.twoFactorEnabled ? 'ON' : 'OFF'}</span>
+                    </button>
+
+                    <button
                       onClick={() => setResetModalUser(usr)}
                       className="px-2.5 py-1 bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded-lg text-[10px] font-bold flex items-center gap-1 hover:bg-amber-500/20"
                     >
                       <KeyRound className="w-3 h-3" />
-                      <span>পাসওয়ার্ড রিসেট</span>
+                      <span>পাসওয়ার্ড</span>
                     </button>
                   </div>
                 </div>
@@ -645,6 +775,71 @@ export const SuperAdminStoresScreen: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* New Store Created Credentials Summary Modal */}
+      {createdCredentials && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+          <div className="w-full max-w-md bg-slate-900 border border-emerald-500/40 rounded-2xl p-6 shadow-2xl space-y-4 animate-fadeIn">
+            <div className="flex items-center gap-3 pb-3 border-b border-slate-800">
+              <div className="p-3 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-100">নতুন শপ সফলভাবে তৈরি হয়েছে!</h3>
+                <p className="text-xs text-emerald-400 font-semibold">{createdCredentials.storeName}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              নতুন শপ এডমিনের লগইন ক্রেডেনশিয়াল নিচে তৈরি করা হয়েছে। আপনি এক ক্লিকে অনুলিপি (Copy) করে শপ মালিকের সাথে শেয়ার করতে পারেন:
+            </p>
+
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2.5 font-mono text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">শপ নাম:</span>
+                <span className="text-slate-200 font-bold">{createdCredentials.storeName}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">ইউজারনেম:</span>
+                <span className="text-emerald-400 font-bold">{createdCredentials.adminUsername}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">পাসওয়ার্ড:</span>
+                <span className="text-amber-300 font-bold">{createdCredentials.passwordInput}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-500">Google 2FA:</span>
+                <span className={createdCredentials.require2FA ? 'text-amber-400 font-bold' : 'text-slate-400'}>
+                  {createdCredentials.require2FA ? 'বাধ্যতামূলক (ON)' : 'বন্ধ (OFF)'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pt-1 border-t border-slate-800/80">
+                <span className="text-slate-500 text-[11px]">রিকভারি কোড:</span>
+                <span className="text-slate-300 font-bold text-[11px]">{createdCredentials.recoveryCode}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={copyCredentialsToClipboard}
+                className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40"
+              >
+                {copiedCreds ? <Check className="w-4 h-4 text-slate-950" /> : <Copy className="w-4 h-4 text-slate-950" />}
+                <span>{copiedCreds ? 'অনুলিপি করা হয়েছে!' : 'ক্রেডেনশিয়াল কপি করুন (Copy)'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCreatedCredentials(null)}
+                className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition"
+              >
+                বন্ধ করুন
+              </button>
+            </div>
           </div>
         </div>
       )}
