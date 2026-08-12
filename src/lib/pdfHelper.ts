@@ -157,9 +157,6 @@ export const downloadElementAsPDF = (elementId: string, filename: string) => {
     wrapper.appendChild(clone);
     document.body.appendChild(wrapper);
 
-    // Sanitize host document before triggering html2pdf
-    sanitizeDocColors(document);
-
     html2pdf()
       .set(opt)
       .from(clone)

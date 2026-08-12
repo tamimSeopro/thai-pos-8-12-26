@@ -16,9 +16,14 @@ import {
   Eye,
   FileText,
   X,
+  Clock,
+  Archive,
+  Sparkles,
+  RefreshCw,
 } from 'lucide-react';
-import { Invoice, Expense, Product, Customer } from '../../types';
+import { Invoice, Expense, Product, Customer, AutoReportSnapshot } from '../../types';
 import { api } from '../../lib/api';
+import { autoReportService } from '../../lib/autoReportService';
 import { usePermissions } from '../../context/PermissionsContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { StatCard } from '../common/StatCard';
@@ -35,6 +40,13 @@ export const AccountingReportsScreen: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // 12-Hour Auto Report Snapshots State
+  const [autoSnapshots, setAutoSnapshots] = useState<AutoReportSnapshot[]>([]);
+  const [showAutoSnapshotModal, setShowAutoSnapshotModal] = useState(false);
+  const [autoRunning, setAutoRunning] = useState(false);
+  const [autoMsg, setAutoMsg] = useState<string | null>(null);
+
 
   // Full Financial Report Print Modal
   const [showFullReportModal, setShowFullReportModal] = useState(false);
@@ -78,12 +90,49 @@ export const AccountingReportsScreen: React.FC = () => {
       setExpenses(exps);
       setProducts(prods);
       setCustomers(custs);
+
+      // Refresh archived snapshots
+      const list = autoReportService.getSnapshots(activeStoreId);
+      setAutoSnapshots(list);
+
+      // Check if 12 hours passed and trigger auto backup
+      const newSnap = await autoReportService.checkAndRunAutoSnapshot(
+        activeStoreId,
+        activeStoreName || 'Thai Glass Store'
+      );
+      if (newSnap) {
+        setAutoSnapshots(autoReportService.getSnapshots(activeStoreId));
+        setAutoMsg('১২ ঘণ্টা পূর্ণ হওয়ায় স্বয়ংক্রিয় ব্যাকআপ স্ন্যাপশট সফলভাবে সংরক্ষিত হয়েছে!');
+        setTimeout(() => setAutoMsg(null), 5000);
+      }
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
   };
+
+  const handleManualAutoSnapshot = async () => {
+    setAutoRunning(true);
+    try {
+      await autoReportService.generateSnapshot(activeStoreId, activeStoreName || 'Thai Glass Store');
+      const list = autoReportService.getSnapshots(activeStoreId);
+      setAutoSnapshots(list);
+      setAutoMsg('১২-ঘণ্টার রিপো‌র্ট স্ন্যাপশট এখনই সেভ করা হয়েছে!');
+      setTimeout(() => setAutoMsg(null), 4000);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setAutoRunning(false);
+    }
+  };
+
+  const handleDeleteSnapshot = (id: string) => {
+    if (!window.confirm('এই ব্যাকআপ স্ন্যাপশটটি কি আর্কাইভ থেকে মুছে ফেলতে চান?')) return;
+    autoReportService.deleteSnapshot(id);
+    setAutoSnapshots(autoReportService.getSnapshots(activeStoreId));
+  };
+
 
   useEffect(() => {
     loadData();
@@ -299,13 +348,26 @@ export const AccountingReportsScreen: React.FC = () => {
         {/* Top-Right Action Buttons */}
         <div className="flex items-center gap-2 flex-wrap">
           <button
+            onClick={() => setShowAutoSnapshotModal(true)}
+            className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3.5 py-2 rounded-xl text-xs transition shadow-md shadow-amber-950/40 relative"
+            title="View 12-Hour Auto Saved Financial Report Snapshots"
+          >
+            <Clock className="w-4 h-4 text-slate-950 animate-pulse" />
+            <span>১২-ঘণ্টা অটো সেভ ({autoSnapshots.length})</span>
+            {autoSnapshots.length > 0 && (
+              <span className="w-2 h-2 rounded-full bg-emerald-950 absolute -top-0.5 -right-0.5 animate-ping" />
+            )}
+          </button>
+
+          <button
             onClick={handleDownloadPDF}
             className="flex items-center gap-1.5 bg-rose-500 hover:bg-rose-400 text-slate-950 font-bold px-3.5 py-2 rounded-xl text-xs transition shadow-md shadow-rose-950/40"
             title="Download complete financial summary as PDF"
           >
             <FileText className="w-4 h-4" />
-            <span>ডাউনলোড পিডিএফ (Download PDF)</span>
+            <span>ডাউনলোড পিডিএফ</span>
           </button>
+
 
           <button
             onClick={() => setShowFullReportModal(true)}
@@ -1545,6 +1607,161 @@ export const AccountingReportsScreen: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* 12-Hour Auto Reports Archive Modal */}
+      {showAutoSnapshotModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+          <div className="w-full max-w-3xl bg-slate-900 border border-amber-500/30 rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-fadeIn">
+            {/* Modal Header */}
+            <div className="p-4 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                  <Archive className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                    <span>১২-ঘণ্টা অটো-ব্যাকআপ রিপোর্ট আর্কাইভ (Auto Report Snapshots)</span>
+                    <span className="bg-emerald-500/10 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/30">
+                      ১০০% ফ্রি
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    প্রতি ১২ ঘণ্টা পর পর নতুন মেমো, বিক্রি, খরচ ও লাভের হিসাব স্বয়ংক্রিয়ভাবে সেভ হয়ে থাকে
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleManualAutoSnapshot}
+                  disabled={autoRunning}
+                  className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-amber-950/30"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${autoRunning ? 'animate-spin' : ''}`} />
+                  <span>এখনই স্ন্যাপশট নিন</span>
+                </button>
+
+                <button
+                  onClick={() => setShowAutoSnapshotModal(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Notification message */}
+            {autoMsg && (
+              <div className="bg-emerald-500/10 border-b border-emerald-500/30 px-4 py-2.5 text-xs font-semibold text-emerald-300 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <span>{autoMsg}</span>
+              </div>
+            )}
+
+            {/* Body */}
+            <div className="p-4 overflow-y-auto space-y-4 flex-1">
+              {autoSnapshots.length === 0 ? (
+                <div className="text-center py-12 space-y-3 bg-slate-950/50 rounded-2xl border border-dashed border-slate-800">
+                  <Clock className="w-10 h-10 text-slate-600 mx-auto animate-pulse" />
+                  <div>
+                    <p className="text-sm font-bold text-slate-300">এখনো কোনো ১২-ঘণ্টার সেভড স্ন্যাপশট নেই!</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      প্রতি ১২ ঘণ্টা পর পর অটোমেটিক সেভ হবে অথবা উপরের кнопка চাপুন।
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleManualAutoSnapshot}
+                    className="mt-2 inline-flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold px-4 py-2 rounded-xl transition"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>প্রথম স্ন্যাপশট তৈরি করুন</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {autoSnapshots.map((snap) => (
+                    <div
+                      key={snap.id}
+                      className="bg-slate-950 border border-slate-800 hover:border-amber-500/40 rounded-xl p-4 transition space-y-3"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-900 pb-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-amber-400" />
+                          <h4 className="text-xs font-bold text-slate-200">{snap.periodLabel}</h4>
+                          <span className="text-[10px] text-slate-500 font-mono">
+                            ({new Date(snap.timestamp).toLocaleTimeString()})
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => autoReportService.exportToCSV(snap)}
+                            className="px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-lg text-[11px] font-bold transition flex items-center gap-1"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>ডাউনলোড Excel/CSV</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSnapshot(snap.id)}
+                            className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition"
+                            title="Delete snapshot"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Snapshot Metrics Grid */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                        <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800/80">
+                          <span className="text-[10px] text-slate-400 block">নতুন মেমো:</span>
+                          <span className="font-bold text-slate-200">{snap.newInvoicesCount} টি</span>
+                        </div>
+                        <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800/80">
+                          <span className="text-[10px] text-slate-400 block">ক্যাশ কালেকশন:</span>
+                          <span className="font-bold text-emerald-400 font-mono">৳{fmtNum(snap.totalRevenue)}</span>
+                        </div>
+                        <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800/80">
+                          <span className="text-[10px] text-slate-400 block">মোট খরচ:</span>
+                          <span className="font-bold text-rose-400 font-mono">৳{fmtNum(snap.totalExpenses)}</span>
+                        </div>
+                        <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800/80">
+                          <span className="text-[10px] text-slate-400 block">নিট আনুমানিক লাভ:</span>
+                          <span className="font-bold text-amber-300 font-mono">৳{fmtNum(snap.netProfit)}</span>
+                        </div>
+                      </div>
+
+                      <div className="text-[11px] text-slate-400 italic bg-slate-900/50 p-2 rounded-lg border border-slate-900">
+                        📌 {snap.summaryText}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-3 bg-slate-900 border-t border-slate-800 flex items-center justify-between">
+              <span className="text-[11px] text-slate-500">
+                মোট সেভকৃত স্ন্যাপশট: {autoSnapshots.length} টি
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowAutoSnapshotModal(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition"
+              >
+                বন্ধ করুন
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+

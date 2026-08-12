@@ -173,3 +173,24 @@ export type ScreenId =
   | 'staff_permissions'
   | 'backup_reset'
   | 'super_admin_stores';
+
+export interface AutoReportSnapshot {
+  id: string;
+  storeId: string;
+  storeName: string;
+  periodLabel: string; // e.g. "12-Hour Snapshot"
+  timestamp: string;
+  startTime: string;
+  endTime: string;
+  totalSalesCount: number;
+  totalRevenue: number;
+  totalCost: number;
+  netProfit: number;
+  totalExpenses: number;
+  dueCollected: number;
+  newDueAmount: number;
+  newInvoicesCount: number;
+  newExpensesCount: number;
+  summaryText: string;
+}
+
