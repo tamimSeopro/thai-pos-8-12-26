@@ -6,6 +6,7 @@ import {
   resetUserPassword,
   unlockUserAccount,
   toggleUser2FA,
+  updateUserProfileBySuperAdmin,
   getStoredUsers,
   StoredUser,
   AuthResult,
@@ -31,6 +32,10 @@ interface PermissionsContextType {
   loginWithCredentials: (username: string, passwordInput: string) => Promise<AuthResult>;
   verify2FA: (userId: string, code: string) => Promise<AuthResult>;
   resetPassword: (targetUserId: string, newPasswordInput: string) => Promise<{ success: boolean; message: string }>;
+  updateUserProfile: (
+    targetUserId: string,
+    params: { name?: string; username?: string; newPassword?: string }
+  ) => Promise<{ success: boolean; message: string }>;
   unlockAccount: (targetUserId: string) => Promise<{ success: boolean; message: string }>;
   toggle2FA: (userId: string, enabled: boolean) => Promise<{ success: boolean; message: string }>;
   getAllUsers: () => Promise<StoredUser[]>;
@@ -205,6 +210,24 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     return resetUserPassword(targetUserId, newPasswordInput, currentUser);
   };
 
+  const updateUserProfile = async (
+    targetUserId: string,
+    params: { name?: string; username?: string; newPassword?: string }
+  ): Promise<{ success: boolean; message: string }> => {
+    if (!currentUser) {
+      return { success: false, message: 'আপনি লগইন করা নেই' };
+    }
+    const res = await updateUserProfileBySuperAdmin(targetUserId, params, currentUser);
+    if (res.success && res.updatedUser && currentUser.id === targetUserId) {
+      setCurrentUser({
+        ...currentUser,
+        name: res.updatedUser.name,
+        username: res.updatedUser.username,
+      });
+    }
+    return res;
+  };
+
   const unlockAccount = async (
     targetUserId: string
   ): Promise<{ success: boolean; message: string }> => {
@@ -276,6 +299,7 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
         loginWithCredentials,
         verify2FA,
         resetPassword,
+        updateUserProfile,
         unlockAccount,
         toggle2FA,
         getAllUsers,

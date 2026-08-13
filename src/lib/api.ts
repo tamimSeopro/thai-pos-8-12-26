@@ -446,6 +446,18 @@ export const api = {
     return newStore;
   },
 
+  async saveStoreDirectly(store: Store): Promise<Store> {
+    const stores = getStored<Store[]>(STORAGE_KEYS.STORES, INITIAL_STORES);
+    const index = stores.findIndex((s) => s.id === store.id);
+    if (index !== -1) {
+      stores[index] = store;
+    } else {
+      stores.unshift(store);
+    }
+    setStored(STORAGE_KEYS.STORES, stores);
+    return store;
+  },
+
   async toggleStoreStatus(storeId: string): Promise<Store> {
     const stores = getStored<Store[]>(STORAGE_KEYS.STORES, INITIAL_STORES);
     const store = stores.find((s) => s.id === storeId);

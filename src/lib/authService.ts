@@ -10,6 +10,7 @@
  */
 
 import { User, Role, PermissionFlags, Store } from '../types';
+import { api } from './api';
 import {
   generateTotpSecret,
   verifyTotpCode,
@@ -714,6 +715,9 @@ export async function createStoreAndAdminAccount(
   users.push(newAdminUser);
   saveStoredUsers(users);
 
+  // Persist store to LocalStorage / backend store registry so it shows in "শপসমূহ"
+  await api.saveStoreDirectly(newStore);
+
   // Invoke secure server-side provisioning via Supabase Service Role
   await provisionSupabaseAdminUser({
     username: cleanUsername,
@@ -727,7 +731,75 @@ export async function createStoreAndAdminAccount(
     success: true,
     newStore,
     adminUser: newAdminUser,
-    message: 'নতুন শপ ও শপ এডমিন একাউন্ট সফলভাবে তৈরি ও Supabase Service Role দ্বারা প্রোভিশন করা হয়েছে!',
+    message: 'নতুন শপ ও শপ এডমিন একাউন্ট সফলভাবে তৈরি ও প্রোভিশন করা হয়েছে!',
+  };
+}
+
+/**
+ * Update user full name, username, and/or password by Super Admin
+ */
+export async function updateUserProfileBySuperAdmin(
+  targetUserId: string,
+  params: {
+    name?: string;
+    username?: string;
+    newPassword?: string;
+  },
+  requestingUser: User
+): Promise<{ success: boolean; message: string; updatedUser?: StoredUser }> {
+  if (requestingUser.role !== 'super_admin' && requestingUser.id !== targetUserId) {
+    return { success: false, message: 'কেবলমাত্র সুপার এডমিন ইউজার তথ্য সম্পাদনা করতে পারবেন' };
+  }
+
+  const users = await getStoredUsers();
+  const targetIndex = users.findIndex((u) => u.id === targetUserId);
+
+  if (targetIndex === -1) {
+    return { success: false, message: 'টার্গেট ইউজার পাওয়া যায়নি' };
+  }
+
+  const target = { ...users[targetIndex] };
+
+  // Check username uniqueness if changing
+  if (params.username && params.username.trim().toLowerCase() !== target.username.toLowerCase()) {
+    const cleanNewUsername = params.username.trim().toLowerCase();
+    if (cleanNewUsername.length < 3) {
+      return { success: false, message: 'ইউজারনেম অন্তত ৩ অক্ষরের হতে হবে' };
+    }
+    const exists = users.some(
+      (u) => u.id !== targetUserId && u.username.toLowerCase() === cleanNewUsername
+    );
+    if (exists) {
+      return { success: false, message: 'এই ইউজারনেমটি আগে থেকেই অন্য কোন ইউজারের জন্য ব্যবহৃত হচ্ছে!' };
+    }
+    target.username = cleanNewUsername;
+  }
+
+  // Update Full Name
+  if (params.name && params.name.trim().length > 0) {
+    target.name = params.name.trim();
+  }
+
+  // Update Password if provided
+  if (params.newPassword && params.newPassword.trim().length > 0) {
+    if (params.newPassword.length < 6) {
+      return { success: false, message: 'নতুন পাসওয়ার্ড অন্তত ৬ অক্ষরের হতে হবে' };
+    }
+    const newSalt = generateSalt();
+    const newHash = await hashPassword(params.newPassword, newSalt);
+    target.passwordSalt = newSalt;
+    target.passwordHash = newHash;
+    target.failedLoginAttempts = 0;
+    target.lockoutUntil = null;
+  }
+
+  users[targetIndex] = target;
+  saveStoredUsers(users);
+
+  return {
+    success: true,
+    message: `ইউজার "${target.name}" (@${target.username})-এর তথ্য ও পাসওয়ার্ড সফলভাবে আপডেট করা হয়েছে!`,
+    updatedUser: target,
   };
 }
 
