@@ -17,17 +17,19 @@ import { ScreenId, Invoice, Product } from '../../types';
 import { api } from '../../lib/api';
 import { usePermissions } from '../../context/PermissionsContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { SingleInvoiceModal } from '../common/SingleInvoiceModal';
 
 interface DashboardScreenProps {
   onNavigate: (screen: ScreenId) => void;
 }
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) => {
-  const { activeStoreId } = usePermissions();
+  const { activeStoreId, activeStoreName } = usePermissions();
   const { t } = useLanguage();
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -174,7 +176,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
               {invoices.slice(0, 5).map((inv) => (
                 <div
                   key={inv.id}
-                  className="flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700 transition"
+                  onClick={() => setSelectedInvoice(inv)}
+                  className="flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-emerald-500/50 transition cursor-pointer"
                 >
                   <div>
                     <div className="flex items-center gap-2">
@@ -256,6 +259,13 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
           )}
         </div>
       </div>
+
+      <SingleInvoiceModal
+        invoice={selectedInvoice}
+        onClose={() => setSelectedInvoice(null)}
+        activeStoreName={activeStoreName}
+        activeStoreId={activeStoreId}
+      />
     </div>
   );
 };

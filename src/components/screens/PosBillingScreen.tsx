@@ -24,6 +24,18 @@ import { EmptyState } from '../common/EmptyState';
 import { fmtNum } from '../../lib/formatters';
 import { downloadElementAsPDF } from '../../lib/pdfHelper';
 
+const formatAddress = (addr?: string): string => {
+  if (!addr || !addr.trim() || addr === 'N/A') return 'N/A';
+  let str = addr.trim();
+  if (str.toLowerCase().startsWith('address:')) {
+    str = str.substring(8).trim();
+  }
+  if (str.startsWith('ঠিকানা:')) {
+    str = str.substring(7).trim();
+  }
+  return str || 'N/A';
+};
+
 export const PosBillingScreen: React.FC = () => {
   const { activeStoreId, activeStoreName, permissions, currentUser } = usePermissions();
   const { t } = useLanguage();
@@ -901,55 +913,95 @@ export const PosBillingScreen: React.FC = () => {
             {/* Printable Area */}
             <div id="printable-cash-memo" className="p-6 bg-white text-slate-900 font-sans printable-memo text-xs space-y-4">
               {/* Receipt Header */}
-              <div className="text-center border-b pb-3 border-slate-300">
-                <h2 className="text-base font-bold text-slate-900">{activeStoreName}</h2>
-                <p className="text-[11px] text-slate-600">থাই গ্লাস, অ্যালুমিনিয়াম প্রফাইল ও ডোর ফিটিংস পাইকারি ও খুচরা বিক্রেতা</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">ক্যাশ মেমো / ইনভয়েস</p>
+              <div className="text-center space-y-1 pb-1">
+                <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                  {activeStoreName || "মেসার্স করিম থাই গ্লাস এন্ড অ্যালুমিনিয়াম"}
+                </h2>
+                <p className="text-xs text-slate-800 font-semibold">
+                  থাই গ্লাস, অ্যালুমিনিয়াম প্রফাইল ও ডোর ফিটিংস পাইকারি ও খুচরা বিক্রেতা
+                </p>
+                <p className="text-xs text-slate-800 font-medium">
+                  ঠিকানা: নয়া বাজার, গুলশান, ঢাকা | মোবাইল: 01711223344
+                </p>
               </div>
 
-              {/* Invoice Meta */}
-              <div className="flex justify-between text-[11px] text-slate-700 font-medium">
-                <div>
-                  <p><strong>মেমো নং:</strong> {savedInvoice.invoiceNo}</p>
-                  <p><strong>গ্রাহক:</strong> {savedInvoice.customerName} ({savedInvoice.customerType === 'dealer' ? 'ডিলার' : 'খুচরা'})</p>
-                  <p><strong>মোবাইল:</strong> {savedInvoice.customerMobile}</p>
+              <div className="border-b-2 border-slate-900 my-2"></div>
+
+              {/* Invoice Meta}
+              <div className="p-3.5 bg-slate-50 border border-slate-300 rounded-xl grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-900">
+                <div className="space-y-1">
+                  <p className="flex items-center gap-1.5 flex-wrap">
+                    <strong className="shrink-0">গ্রাহকের নাম:</strong>
+                    <span className="font-bold">{savedInvoice.customerName}</span>
+                  </p>
+                  <p className="flex items-center gap-1.5 flex-wrap">
+                    <strong className="shrink-0">মোবাইল:</strong>
+                    <span className="font-mono">{savedInvoice.customerMobile}</span>
+                    <span className="text-slate-400">|</span>
+                    <strong className="shrink-0">ধরন:</strong>
+                    <span>{savedInvoice.customerType === 'dealer' ? 'ডিলার' : 'খুচরা'}</span>
+                  </p>
+                  <p className="flex items-start gap-1.5">
+                    <strong className="shrink-0">ঠিকানা:</strong>
+                    <span>{formatAddress(savedInvoice.customerAddress)}</span>
+                  </p>
                 </div>
-                <div className="text-right">
-                  <p><strong>তারিখ:</strong> {savedInvoice.createdAt ? new Date(savedInvoice.createdAt).toLocaleDateString('bn-BD') : '-'}</p>
-                  <p><strong>বিক্রয়কর্মী:</strong> {savedInvoice.createdByName}</p>
-                  <p><strong>ঠিকানা:</strong> {savedInvoice.customerAddress}</p>
+                <div className="space-y-1 text-right">
+                  <p><strong>ইনভয়েস নম্বর:</strong> <span className="font-mono font-bold">{savedInvoice.invoiceNo}</span></p>
+                  <p><strong>তারিখ ও সময়:</strong> <span className="font-mono">{savedInvoice.createdAt ? new Date(savedInvoice.createdAt).toLocaleString('bn-BD', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'}</span></p>
+                  <p>
+                    <strong>পেমেন্ট:</strong>{' '}
+                    <span className="font-bold text-emerald-700">
+                      {savedInvoice.paymentStatus === 'paid' ? 'পরিশোধিত' : savedInvoice.paymentStatus === 'partial' ? 'আংশিক পরিশোধিত' : 'বকেয়া'}
+                    </span>
+                    {savedInvoice.paymentMethod ? ` (${savedInvoice.paymentMethod})` : ''}
+                  </p>
                 </div>
               </div>
 
-              {/* Items Table */}
-              <table className="w-full border-collapse border border-slate-300 text-left text-[11px]">
-                <thead>
-                  <tr className="bg-slate-100 border-b border-slate-300 font-bold">
-                    <th className="p-1.5 border-r border-slate-300">পণ্যের নাম</th>
-                    <th className="p-1.5 border-r border-slate-300 text-center">ইউনিট</th>
-                    <th className="p-1.5 border-r border-slate-300 text-center">সাইজ / পরিমাণ</th>
-                    <th className="p-1.5 border-r border-slate-300 text-right">দর (৳)</th>
-                    <th className="p-1.5 text-right">মোট (৳)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {savedInvoice.items.map((it, idx) => (
-                    <tr key={idx} className="border-b border-slate-200">
-                      <td className="p-1.5 border-r border-slate-300 font-medium">{it.productNameBn}</td>
-                      <td className="p-1.5 border-r border-slate-300 text-center font-bold text-slate-800 uppercase text-[10px]">
-                        {it.unit || 'sqft'}
-                      </td>
-                      <td className="p-1.5 border-r border-slate-300 text-center">
-                        {it.heightInches && it.widthInches
-                          ? `${it.heightInches}"×${it.widthInches}" (${it.sqft} SqFt)`
-                          : `${it.qty} ${it.unit}`}
-                      </td>
-                      <td className="p-1.5 border-r border-slate-300 text-right">৳{fmtNum(it.rate)}</td>
-                      <td className="p-1.5 text-right font-bold">৳{fmtNum(it.total)}</td>
+              {/* Items Section Header */}
+              <div className="pt-1">
+                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center justify-between mb-1">
+                  <span>পণ্যসমূহের তালিকা (PURCHASED ITEMS LIST)</span>
+                  <span className="text-[10px] text-slate-600 font-normal">
+                    মোট পণ্য: {savedInvoice.items?.length || 0} টি
+                  </span>
+                </h4>
+
+                {/* Items Table System */}
+                <table className="w-full border-collapse border border-slate-400 text-left text-[11px]">
+                  <thead>
+                    <tr className="bg-slate-100 font-bold">
+                      <th className="p-1.5 border border-slate-400 text-center w-12">ক্রঃ নং</th>
+                      <th className="p-1.5 border border-slate-400">পণ্যের নাম</th>
+                      <th className="p-1.5 border border-slate-400 text-center">ইউনিট</th>
+                      <th className="p-1.5 border border-slate-400 text-center">সাইজ / পরিমাণ</th>
+                      <th className="p-1.5 border border-slate-400 text-right">দর (৳)</th>
+                      <th className="p-1.5 border border-slate-400 text-right">মোট (৳)</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {savedInvoice.items.map((it, idx) => (
+                      <tr key={idx}>
+                        <td className="p-1.5 border border-slate-300 text-center font-mono font-semibold text-slate-700">
+                          {(idx + 1).toLocaleString('bn-BD')}
+                        </td>
+                        <td className="p-1.5 border border-slate-300 font-medium">{it.productNameBn}</td>
+                        <td className="p-1.5 border border-slate-300 text-center font-bold text-slate-800 uppercase text-[10px]">
+                          {it.unit || 'sqft'}
+                        </td>
+                        <td className="p-1.5 border border-slate-300 text-center">
+                          {it.heightInches && it.widthInches
+                            ? `${it.heightInches}"×${it.widthInches}" (${it.sqft} SqFt)`
+                            : `${it.qty} ${it.unit}`}
+                        </td>
+                        <td className="p-1.5 border border-slate-300 text-right">৳{fmtNum(it.rate)}</td>
+                        <td className="p-1.5 border border-slate-300 text-right font-bold">৳{fmtNum(it.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
               {/* Total Calculation */}
               <div className="flex justify-end pt-2">
@@ -983,30 +1035,17 @@ export const PosBillingScreen: React.FC = () => {
                 </div>
               </div>
 
-              {/* Signatures Section */}
+              {/* Signatures Section (1 Authorizer Signature) */}
               {showSignatureOption && (
-                <div className="pt-12 pb-2 grid grid-cols-3 gap-4 text-center text-[11px] text-slate-800">
-                  <div>
-                    <div className="border-t border-dashed border-slate-400 pt-1 font-semibold">
-                      গ্রাহকের স্বাক্ষর
-                    </div>
-                    <span className="text-[9px] text-slate-500">(Customer)</span>
-                  </div>
-
-                  <div>
-                    <div className="border-t border-dashed border-slate-400 pt-1 font-semibold">
-                      বিক্রয়কর্মীর স্বাক্ষর
-                    </div>
-                    <span className="text-[10px] font-bold text-slate-800 mt-0.5 block">
-                      {savedInvoice.createdByName || 'বিক্রয়কর্মী'}
-                    </span>
-                  </div>
-
-                  <div>
-                    <div className="border-t border-dashed border-slate-400 pt-1 font-semibold">
+                <div className="pt-12 pb-2 flex justify-end">
+                  <div className="text-center w-48 space-y-1">
+                    <div className="border-t-2 border-dashed border-slate-800 w-full mb-1.5"></div>
+                    <p className="font-bold text-slate-900 text-xs leading-normal">
                       অনুমোদিত স্বাক্ষর
-                    </div>
-                    <span className="text-[9px] text-slate-500">(Authorized)</span>
+                    </p>
+                    <p className="text-[10px] text-slate-600 leading-tight">
+                      (Authorized Signature)
+                    </p>
                   </div>
                 </div>
               )}
@@ -1023,17 +1062,10 @@ export const PosBillingScreen: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => downloadElementAsPDF('printable-cash-memo', `Cash_Memo_${savedInvoice.invoiceNo}`)}
-                  className="bg-rose-500 hover:bg-rose-400 text-slate-950 px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
+                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-md"
                 >
                   <FileText className="w-4 h-4" />
                   <span>ডাউনলোড পিডিএফ (Download PDF)</span>
-                </button>
-                <button
-                  onClick={() => window.print()}
-                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
-                >
-                  <Printer className="w-4 h-4" />
-                  <span>প্রিন্ট করুন (Print Now)</span>
                 </button>
               </div>
               <button

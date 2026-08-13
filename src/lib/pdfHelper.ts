@@ -61,8 +61,7 @@ function sanitizeDocColors(doc: Document) {
 export const downloadElementAsPDF = (elementId: string, filename: string) => {
   const element = document.getElementById(elementId);
   if (!element) {
-    console.error(`Element #${elementId} not found, falling back to print.`);
-    window.print();
+    console.error(`Element #${elementId} not found.`);
     return;
   }
 
@@ -171,10 +170,8 @@ export const downloadElementAsPDF = (elementId: string, filename: string) => {
         if (document.body.contains(wrapper)) {
           document.body.removeChild(wrapper);
         }
-        window.print();
       });
   } catch (err) {
     console.error('PDF generation error:', err);
-    window.print();
   }
 };

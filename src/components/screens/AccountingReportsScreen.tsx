@@ -30,6 +30,7 @@ import { StatCard } from '../common/StatCard';
 import { EmptyState } from '../common/EmptyState';
 import { fmtNum, fmtDate } from '../../lib/formatters';
 import { downloadElementAsPDF } from '../../lib/pdfHelper';
+import { SingleInvoiceModal } from '../common/SingleInvoiceModal';
 
 export const AccountingReportsScreen: React.FC = () => {
   const { activeStoreId, activeStoreName, permissions } = usePermissions();
@@ -925,186 +926,12 @@ export const AccountingReportsScreen: React.FC = () => {
       </div>
 
       {/* Invoice & Customer Detail Modal */}
-      {selectedInvoice && (
-        <div
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setSelectedInvoice(null);
-          }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto"
-        >
-          <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden my-8">
-            {/* Modal Header Bar (no-print) */}
-            <div className="p-4 bg-slate-800 border-b border-slate-700 flex flex-wrap items-center justify-between gap-3 no-print">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  <Receipt className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-slate-100">
-                      ইনভয়েস মেমো: #{selectedInvoice.invoiceNo}
-                    </h3>
-                    <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-mono px-2 py-0.5 rounded border border-emerald-500/30">
-                      {(selectedInvoice.paymentStatus || '').toUpperCase()}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                    ইস্যুর সময়: {fmtDate(selectedInvoice.createdAt, {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  onClick={() => downloadElementAsPDF('printable-single-invoice', `Invoice_Memo_${selectedInvoice.invoiceNo}`)}
-                  className="bg-rose-500 hover:bg-rose-400 text-slate-950 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-md"
-                  title="Download / Save as PDF"
-                >
-                  <FileText className="w-4 h-4" />
-                  <span>ডাউনলোড পিডিএফ (Download PDF)</span>
-                </button>
-
-                <button
-                  onClick={() => window.print()}
-                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-md"
-                >
-                  <Printer className="w-4 h-4" />
-                  <span>প্রিন্ট করুন (Print Now)</span>
-                </button>
-
-                <button
-                  onClick={() => setSelectedInvoice(null)}
-                  className="bg-slate-700 hover:bg-rose-600 text-slate-100 hover:text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-md cursor-pointer border border-slate-600 hover:border-rose-500"
-                  title="Close Modal (Esc)"
-                >
-                  <X className="w-4 h-4" />
-                  <span>বন্ধ করুন (Close)</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Printable Invoice Body */}
-            <div id="printable-single-invoice" className="p-6 bg-slate-900 printable-invoice text-slate-100 space-y-5 text-xs">
-              {/* Customer Details Box */}
-              <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                <div>
-                  <span className="text-slate-500 text-[10px] uppercase font-semibold">গ্রাহকের নাম</span>
-                  <p className="font-bold text-slate-100 mt-0.5">{selectedInvoice.customerName}</p>
-                </div>
-                <div>
-                  <span className="text-slate-500 text-[10px] uppercase font-semibold">মোবাইল নম্বর</span>
-                  <p className="font-mono text-emerald-400 font-bold mt-0.5">{selectedInvoice.customerMobile}</p>
-                </div>
-                <div>
-                  <span className="text-slate-500 text-[10px] uppercase font-semibold">পেমেন্ট মেথড</span>
-                  <p className="font-mono text-amber-300 uppercase font-bold mt-0.5">{selectedInvoice.paymentMethod}</p>
-                </div>
-              </div>
-
-              {/* Items Purchased Table */}
-              <div className="space-y-2">
-                <h4 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
-                  পণ্যসমূহের তালিকা (Purchased Items List)
-                </h4>
-
-                <div className="overflow-x-auto border border-slate-800 rounded-xl">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="bg-slate-950 border-b border-slate-800 text-slate-400 font-semibold text-[10px]">
-                        <th className="p-2.5">পণ্যের নাম</th>
-                        <th className="p-2.5 text-center">ইউনিট</th>
-                        <th className="p-2.5 text-center">পরিমাণ / স্কয়ার ফিট</th>
-                        <th className="p-2.5 text-right">একক দর</th>
-                        <th className="p-2.5 text-right">মোট</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60">
-                      {(selectedInvoice.items || []).map((item, idx) => (
-                        <tr key={idx} className="hover:bg-slate-950/50">
-                          <td className="p-2.5 font-medium text-slate-200">{item.productName}</td>
-                          <td className="p-2.5 text-center font-mono font-bold text-emerald-400 text-[10px] uppercase">
-                            {item.unit || (item.squareFeet ? 'sqft' : 'pcs')}
-                          </td>
-                          <td className="p-2.5 text-center font-mono text-slate-300">
-                            {item.squareFeet
-                              ? `${item.squareFeet} sqft (${item.heightFt}x${item.widthFt} ft)`
-                              : `${item.quantity} টি`}
-                          </td>
-                          <td className="p-2.5 text-right font-mono text-slate-300">
-                            ৳ {fmtNum(item.unitPrice)}
-                          </td>
-                          <td className="p-2.5 text-right font-mono font-bold text-emerald-400">
-                            ৳ {fmtNum(item.totalPrice)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Financial Totals Summary */}
-              <div className="p-4 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2 text-xs">
-                <div className="flex justify-between text-slate-300">
-                  <span>সাব-টোটাল (Subtotal):</span>
-                  <span className="font-mono font-bold">৳ {fmtNum(selectedInvoice.subTotal)}</span>
-                </div>
-                {(selectedInvoice.discount ?? 0) > 0 && (
-                  <div className="flex justify-between text-amber-400">
-                    <span>ডিসকাউন্ট (Discount):</span>
-                    <span className="font-mono font-bold">- ৳ {fmtNum(selectedInvoice.discount)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-sm font-bold text-slate-100 pt-2 border-t border-slate-800">
-                  <span>সর্বমোট বিল (Grand Total):</span>
-                  <span className="font-mono text-emerald-400">৳ {fmtNum(selectedInvoice.grandTotal)}</span>
-                </div>
-                <div className="flex justify-between text-xs text-emerald-400">
-                  <span>নগদ পরিশোধিত (Paid Amount):</span>
-                  <span className="font-mono font-bold">৳ {fmtNum(selectedInvoice.paidAmount)}</span>
-                </div>
-                <div className="flex justify-between text-xs text-rose-400 font-bold">
-                  <span>অবশিষ্ট বাকি (Due Amount):</span>
-                  <span className="font-mono">৳ {fmtNum(selectedInvoice.dueAmount)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom Footer Bar (no-print) */}
-            <div className="p-3 bg-slate-800 border-t border-slate-700 flex justify-between items-center no-print">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => downloadElementAsPDF('printable-single-invoice', `Invoice_Memo_${selectedInvoice.invoiceNo}`)}
-                  className="bg-rose-500 hover:bg-rose-400 text-slate-950 px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
-                >
-                  <FileText className="w-4 h-4" />
-                  <span>ডাউনলোড পিডিএফ (Download PDF)</span>
-                </button>
-                <button
-                  onClick={() => window.print()}
-                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
-                >
-                  <Printer className="w-4 h-4" />
-                  <span>প্রিন্ট করুন (Print Now)</span>
-                </button>
-              </div>
-              <button
-                onClick={() => setSelectedInvoice(null)}
-                className="bg-slate-700 hover:bg-rose-600 text-slate-100 hover:text-white px-4 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-md cursor-pointer border border-slate-600 hover:border-rose-500"
-              >
-                <X className="w-4 h-4" />
-                <span>বন্ধ করুন (Close)</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <SingleInvoiceModal
+        invoice={selectedInvoice}
+        onClose={() => setSelectedInvoice(null)}
+        activeStoreName={activeStoreName}
+        activeStoreId={activeStoreId}
+      />
 
       {/* FULL FINANCIAL LEDGER REPORT PRINT MODAL */}
       {showFullReportModal && (

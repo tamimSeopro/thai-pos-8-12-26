@@ -21,9 +21,10 @@ import { useLanguage } from '../../context/LanguageContext';
 import { StatCard } from '../common/StatCard';
 import { EmptyState } from '../common/EmptyState';
 import { fmtNum, fmtDate } from '../../lib/formatters';
+import { SingleInvoiceModal } from '../common/SingleInvoiceModal';
 
 export const DueLedgerScreen: React.FC = () => {
-  const { activeStoreId, permissions } = usePermissions();
+  const { activeStoreId, activeStoreName, permissions } = usePermissions();
   const { t } = useLanguage();
 
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -31,6 +32,7 @@ export const DueLedgerScreen: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
 
   // Collection Form state
   const [collectAmount, setCollectAmount] = useState<number>(0);
@@ -387,7 +389,8 @@ export const DueLedgerScreen: React.FC = () => {
                     {selectedCustomerInvoices.map((inv) => (
                       <div
                         key={inv.id}
-                        className="p-3 bg-slate-950 border border-slate-800/80 rounded-xl flex items-center justify-between text-xs"
+                        onClick={() => setSelectedInvoice(inv)}
+                        className="p-3 bg-slate-950 border border-slate-800/80 hover:border-emerald-500/50 rounded-xl flex items-center justify-between text-xs cursor-pointer transition"
                       >
                         <div>
                           <div className="flex items-center gap-2">
@@ -498,6 +501,13 @@ export const DueLedgerScreen: React.FC = () => {
           </div>
         )}
       </div>
+
+      <SingleInvoiceModal
+        invoice={selectedInvoice}
+        onClose={() => setSelectedInvoice(null)}
+        activeStoreName={activeStoreName}
+        activeStoreId={activeStoreId}
+      />
     </div>
   );
 };
