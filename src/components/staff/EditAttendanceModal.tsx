@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Clock, FileText, CheckCircle2, Trash2 } from 'lucide-react';
+import { X, Calendar, Clock, FileText, CheckCircle2, Trash2, Lock } from 'lucide-react';
 import { StaffAttendanceLog, AttendanceStatusType } from '../../types';
 import { updateAttendanceRecord, deleteAttendanceRecord } from '../../lib/attendanceService';
+import { usePermissions } from '../../context/PermissionsContext';
 
 interface EditAttendanceModalProps {
   isOpen: boolean;
@@ -17,6 +18,9 @@ export const EditAttendanceModal: React.FC<EditAttendanceModalProps> = ({
   record,
 }) => {
   if (!isOpen || !record) return null;
+
+  const { isSuperAdmin, isStoreAdmin } = usePermissions();
+  const canEdit = isSuperAdmin || isStoreAdmin;
 
   const [date, setDate] = useState<string>(record.date || '');
   const [loginTimeStr, setLoginTimeStr] = useState<string>('09:00');
@@ -52,7 +56,10 @@ export const EditAttendanceModal: React.FC<EditAttendanceModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!record) return;
+    if (!record || !canEdit) {
+      alert('শুধুমাত্র এডমিন উপস্থিতি সম্পাদনা করতে পারেন');
+      return;
+    }
 
     const [loginH, loginM] = loginTimeStr.split(':').map(Number);
     const loginDate = new Date(`${date}T00:00:00`);
@@ -85,6 +92,10 @@ export const EditAttendanceModal: React.FC<EditAttendanceModalProps> = ({
   };
 
   const handleDelete = () => {
+    if (!canEdit) {
+      alert('শুধুমাত্র এডমিন উপস্থিতি মুছে ফেলতে পারেন');
+      return;
+    }
     if (confirm('আপনি কি এই উপস্থিতির রেকর্ডটি মুছে ফেলতে চান?')) {
       deleteAttendanceRecord(record.id);
       onSuccess();

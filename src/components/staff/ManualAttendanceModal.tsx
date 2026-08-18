@@ -23,9 +23,13 @@ export const ManualAttendanceModal: React.FC<ManualAttendanceModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
+  const filteredStaffList = staffList.filter(
+    (s) => s.role !== 'super_admin' && s.username !== 'superadmin' && s.id !== 'usr_super_admin'
+  );
+
   const todayStr = new Date().toISOString().split('T')[0];
   const [selectedUserId, setSelectedUserId] = useState<string>(
-    staffList[0]?.id || ''
+    filteredStaffList[0]?.id || ''
   );
   const [date, setDate] = useState<string>(todayStr);
   const [loginTimeStr, setLoginTimeStr] = useState<string>('09:00');
@@ -37,7 +41,7 @@ export const ManualAttendanceModal: React.FC<ManualAttendanceModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const staff = staffList.find((s) => s.id === selectedUserId);
+    const staff = filteredStaffList.find((s) => s.id === selectedUserId) || filteredStaffList[0];
     if (!staff) return;
 
     setIsSubmitting(true);
@@ -116,7 +120,7 @@ export const ManualAttendanceModal: React.FC<ManualAttendanceModalProps> = ({
               required
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 focus:outline-none focus:border-emerald-500"
             >
-              {staffList.map((s) => (
+              {filteredStaffList.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name} (@{s.username}) - {s.role === 'moderator' ? 'বিক্রয়কর্মী' : s.role}
                 </option>
