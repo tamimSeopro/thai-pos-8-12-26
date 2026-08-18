@@ -65,9 +65,9 @@ export const StaffPermissionsScreen: React.FC = () => {
 
   const loadStaffData = async () => {
     const allUsers = await getStoredUsers();
-    // Filter staff belonging to active store
+    // Filter staff strictly belonging to active store
     const filtered = allUsers.filter(
-      (u) => u.role === 'moderator' && (u.storeId === activeStoreId || !u.storeId)
+      (u) => u.role === 'moderator' && u.storeId === activeStoreId
     );
     setStaffList(filtered);
   };

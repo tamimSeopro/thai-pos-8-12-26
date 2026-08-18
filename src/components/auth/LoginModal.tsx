@@ -279,22 +279,27 @@ export const LoginModal: React.FC = () => {
                   আপনার মোবাইল থেকে Google Authenticator / Authy অ্যাপ খুলে ৬-ডিজিটের নিরাপত্তা কোড লিখুন।
                 </p>
 
-                {/* Toggle QR Code Setup View */}
-                {qrDetails && (
-                  <div className="pt-2">
+                {/* 2FA Status & Optional QR Code toggle (Hidden by default for connected users) */}
+                <div className="pt-2 flex flex-col items-center gap-1.5">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-full text-[10px] font-semibold">
+                    <CheckCircle className="w-3 h-3 text-emerald-400" />
+                    <span>Google Authenticator কানেক্টেড ও সক্রিয় (Active)</span>
+                  </div>
+                  
+                  {qrDetails && (
                     <button
                       type="button"
                       onClick={() => setShowQrSetup(!showQrSetup)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-emerald-400 hover:text-emerald-300 text-[11px] font-bold transition"
+                      className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-emerald-400 transition underline mt-1"
                     >
-                      <QrCode className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>{showQrSetup ? 'QR কোড লুকান' : 'QR কোড স্ক্যান করুন (Scan QR)'}</span>
+                      <QrCode className="w-3 h-3" />
+                      <span>{showQrSetup ? 'QR কোড লুকান (Hide QR)' : 'নতুন ডিভাইসে সেটআপ করতে QR কোড দেখুন (Show QR)'}</span>
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
 
-              {/* QR Code Setup Modal / Card view */}
+              {/* QR Code Setup Modal / Card view (Hidden by default) */}
               {showQrSetup && qrDetails && (
                 <div className="p-4 bg-slate-950 border border-emerald-500/30 rounded-xl text-center space-y-3 animate-fadeIn">
                   <p className="text-[11px] font-bold text-emerald-400">
