@@ -194,3 +194,33 @@ export interface AutoReportSnapshot {
   summaryText: string;
 }
 
+export type AttendanceStatusType = 'present' | 'late' | 'half_day' | 'leave';
+
+export interface StaffAttendanceLog {
+  id: string;
+  userId: string;
+  username: string;
+  userName: string;
+  role: Role;
+  storeId: string;
+  storeName: string;
+  date: string; // YYYY-MM-DD
+  loginTime: string; // ISO string
+  logoutTime?: string | null; // ISO string or null if active
+  durationMinutes: number; // calculated duration in minutes
+  status: 'active' | 'completed' | 'manual';
+  attendanceType: AttendanceStatusType;
+  deviceOrBrowser?: string;
+  note?: string;
+  createdAt: string;
+}
+
+export interface AttendanceSettings {
+  storeId: string;
+  shiftStartTime: string; // e.g. "09:00"
+  lateGraceMinutes: number; // e.g. 15
+  shiftEndTime: string; // e.g. "19:00"
+  minHoursForFullDay: number; // e.g. 8
+  autoAttendanceOnLogin: boolean;
+}
+

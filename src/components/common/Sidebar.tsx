@@ -71,9 +71,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'staff_permissions' as ScreenId,
       label: t('navStaffPermissions'),
-      subLabel: 'Staff Control',
+      subLabel: 'Staff & Attendance',
       icon: UserCheck,
-      visible: isStoreAdmin, // store_admin only
+      visible: isStoreAdmin || isSuperAdmin,
     },
     {
       id: 'backup_reset' as ScreenId,

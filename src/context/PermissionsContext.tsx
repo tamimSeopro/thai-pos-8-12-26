@@ -12,6 +12,7 @@ import {
   AuthResult,
   DEFAULT_FULL_PERMISSIONS,
 } from '../lib/authService';
+import { recordStaffLogin, recordStaffLogout } from '../lib/attendanceService';
 
 export { DEFAULT_FULL_PERMISSIONS };
 
@@ -187,6 +188,11 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (res.success && res.user) {
       setImpersonatedStore(null);
       setCurrentUser(res.user);
+      try {
+        recordStaffLogin(res.user);
+      } catch (e) {
+        console.error('Attendance login log error:', e);
+      }
     }
     return res;
   };
@@ -196,6 +202,11 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (res.success && res.user) {
       setImpersonatedStore(null);
       setCurrentUser(res.user);
+      try {
+        recordStaffLogin(res.user);
+      } catch (e) {
+        console.error('Attendance login log error:', e);
+      }
     }
     return res;
   };
@@ -266,16 +277,33 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     const res = await authenticateUser(targetUsername, presetRole === 'moderator' ? 'staff123' : 'admin123');
     if (res.success && res.user) {
       setCurrentUser(res.user);
+      try {
+        recordStaffLogin(res.user);
+      } catch (e) {
+        console.error('Attendance preset login log error:', e);
+      }
     } else if (res.requires2FA && res.tempUserId) {
       // If 2FA enabled for preset, verify with generated code or preset
       const verifyRes = await verify2FACode(res.tempUserId, res.generatedOtp || '123456');
       if (verifyRes.success && verifyRes.user) {
         setCurrentUser(verifyRes.user);
+        try {
+          recordStaffLogin(verifyRes.user);
+        } catch (e) {
+          console.error('Attendance preset 2FA login log error:', e);
+        }
       }
     }
   };
 
   const logout = () => {
+    if (currentUser) {
+      try {
+        recordStaffLogout(currentUser.id);
+      } catch (e) {
+        console.error('Attendance logout error:', e);
+      }
+    }
     setCurrentUser(null);
     setImpersonatedStore(null);
   };

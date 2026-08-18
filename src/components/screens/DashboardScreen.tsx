@@ -9,6 +9,10 @@ import {
   TrendingUp,
   Receipt,
   ArrowRight,
+  UserCheck,
+  Clock,
+  Activity,
+  CalendarCheck,
 } from 'lucide-react';
 import { StatCard } from '../common/StatCard';
 import { EmptyState } from '../common/EmptyState';
@@ -18,19 +22,21 @@ import { api } from '../../lib/api';
 import { usePermissions } from '../../context/PermissionsContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { SingleInvoiceModal } from '../common/SingleInvoiceModal';
+import { getTodayAttendanceSummary, formatMinutesToBangla } from '../../lib/attendanceService';
 
 interface DashboardScreenProps {
   onNavigate: (screen: ScreenId) => void;
 }
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) => {
-  const { activeStoreId, activeStoreName } = usePermissions();
+  const { activeStoreId, activeStoreName, isStoreAdmin, isSuperAdmin } = usePermissions();
   const { t } = useLanguage();
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(true);
+  const [attendanceSummary, setAttendanceSummary] = useState(getTodayAttendanceSummary(activeStoreId));
 
   useEffect(() => {
     async function loadData() {
@@ -42,6 +48,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
         ]);
         setInvoices(invs);
         setProducts(prods);
+        setAttendanceSummary(getTodayAttendanceSummary(activeStoreId));
       } catch (e) {
         console.error(e);
       } finally {
@@ -259,6 +266,110 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({ onNavigate }) 
           )}
         </div>
       </div>
+
+      {/* Staff Attendance Status Banner for Admins */}
+      {(isStoreAdmin || isSuperAdmin) && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg shadow-slate-950/40">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800 mb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <CalendarCheck className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-200">আজকের স্টাফ উপস্থিতি ও লাইভ সেশন</h3>
+                <p className="text-[11px] text-slate-400">
+                  দোকানে বিক্রয়কর্মীদের লগইন, লগআউট ও সক্রিয় উপস্থিতি ট্র্যাকার
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 text-xs">
+                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span>{attendanceSummary.activeCount.toLocaleString('bn-BD')} জন কর্মরত</span>
+                </span>
+                <span className="px-2.5 py-1 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-300 font-medium">
+                  {attendanceSummary.presentCount.toLocaleString('bn-BD')} জন উপস্থিত
+                </span>
+              </div>
+
+              <button
+                onClick={() => onNavigate('staff_permissions')}
+                className="text-xs text-emerald-400 hover:underline flex items-center gap-1 font-semibold"
+              >
+                <span>উপস্থিতি খাতা দেখুন</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+
+          {attendanceSummary.todayLogs.length === 0 ? (
+            <p className="text-xs text-slate-500 text-center py-3">
+              আজ এখনও কোনো স্টাফ লগইন করেননি। স্টাফ লগইন করলে এখানে তাদের উপস্থিতি ও সময় দৃশ্যমান হবে।
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {attendanceSummary.todayLogs.slice(0, 6).map((log) => {
+                const isActive = log.status === 'active';
+                const duration = isActive
+                  ? Math.max(1, Math.round((Date.now() - new Date(log.loginTime).getTime()) / 60000))
+                  : log.durationMinutes;
+
+                const loginTimeFormatted = new Date(log.loginTime).toLocaleTimeString('bn-BD', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true,
+                });
+
+                return (
+                  <div
+                    key={log.id}
+                    className={`p-3 rounded-xl border flex items-center justify-between ${
+                      isActive
+                        ? 'bg-slate-950/80 border-emerald-500/30'
+                        : 'bg-slate-950/40 border-slate-800/80'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-xs text-slate-200">
+                        {log.userName ? log.userName.charAt(0) : 'U'}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs font-bold text-slate-200">{log.userName}</p>
+                          {isActive && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+                          <Clock className="w-3 h-3 text-slate-500" />
+                          <span>লগইন: {loginTimeFormatted}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded-md font-semibold border ${
+                          isActive
+                            ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                            : 'bg-slate-800 text-slate-400 border-slate-700'
+                        }`}
+                      >
+                        {isActive ? 'কর্মরত' : 'লগআউট'}
+                      </span>
+                      <p className="text-[10px] text-slate-400 mt-1 font-mono">
+                        {formatMinutesToBangla(duration)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       <SingleInvoiceModal
         invoice={selectedInvoice}
