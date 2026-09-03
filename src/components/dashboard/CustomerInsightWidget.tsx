@@ -124,11 +124,11 @@ export const CustomerInsightWidget: React.FC<CustomerInsightWidgetProps> = ({
         </div>
         <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden flex">
           <div
-            style={{ width: `${totalCustomers > 0 ? (dealerCount / totalCustomers) * 100 : 50}%` }}
+            style={{ width: `${totalCustomers > 0 ? (dealerCount / totalCustomers) * 100 : 0}%` }}
             className="bg-emerald-500 h-full"
           />
           <div
-            style={{ width: `${totalCustomers > 0 ? (retailCount / totalCustomers) * 100 : 50}%` }}
+            style={{ width: `${totalCustomers > 0 ? (retailCount / totalCustomers) * 100 : 0}%` }}
             className="bg-sky-500 h-full"
           />
         </div>

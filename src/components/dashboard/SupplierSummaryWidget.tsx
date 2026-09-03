@@ -73,7 +73,7 @@ export const SupplierSummaryWidget: React.FC<SupplierSummaryWidgetProps> = ({
             Pending Supplier Payments (বকেয়া মহাজন)
           </p>
           <p className="text-lg font-extrabold text-indigo-400 font-mono mt-0.5">
-            ৳ {fmtNum(pendingSupplierPayments > 0 ? pendingSupplierPayments : 18500)}
+            ৳ {fmtNum(pendingSupplierPayments)}
           </p>
           <p className="text-[10px] text-slate-500 mt-1">সরবরাহকারীদের প্রদেয় বকেয়া বিল</p>
         </div>
@@ -83,9 +83,11 @@ export const SupplierSummaryWidget: React.FC<SupplierSummaryWidgetProps> = ({
             Total Purchases This Month (চলতি মাসের ক্রয়)
           </p>
           <p className="text-lg font-extrabold text-slate-200 font-mono mt-0.5">
-            ৳ {fmtNum(totalMonthPurchaseAmount > 0 ? totalMonthPurchaseAmount : 54200)}
+            ৳ {fmtNum(totalMonthPurchaseAmount)}
           </p>
-          <p className="text-[10px] text-slate-500 mt-1">{monthPurchases.length || 3} টি চালান/লট গৃহীত</p>
+          <p className="text-[10px] text-slate-500 mt-1">
+            {monthPurchases.length.toLocaleString('bn-BD')} টি চালান/লট গৃহীত
+          </p>
         </div>
       </div>
 

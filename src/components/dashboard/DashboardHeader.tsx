@@ -72,7 +72,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             <div>
               <p className="text-[10px] text-slate-500 font-medium">আজকের স্টাফ (Active Staff)</p>
               <p className="font-semibold text-sky-300">
-                {activeStaffCount > 0 ? `${activeStaffCount} জন সক্রিয়` : '৩ জন সক্রিয় ইউজার'}
+                {activeStaffCount > 0 ? `${activeStaffCount.toLocaleString('bn-BD')} জন সক্রিয়` : '০ জন সক্রিয়'}
               </p>
             </div>
           </div>
