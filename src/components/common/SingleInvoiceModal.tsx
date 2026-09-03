@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Invoice, Store } from '../../types';
 import { Receipt, FileText, Printer, X } from 'lucide-react';
-import { downloadElementAsPDF } from '../../lib/pdfHelper';
+import { downloadElementAsPDF, printElementDirectly } from '../../lib/pdfHelper';
 import { api } from '../../lib/api';
 
 interface SingleInvoiceModalProps {
@@ -18,6 +18,17 @@ export const SingleInvoiceModal: React.FC<SingleInvoiceModalProps> = ({
   activeStoreId,
 }) => {
   const [storeInfo, setStoreInfo] = useState<Store | null>(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
+  const handleDownloadPDF = async () => {
+    if (!invoice || isGeneratingPdf) return;
+    setIsGeneratingPdf(true);
+    try {
+      await downloadElementAsPDF('printable-single-invoice', `Invoice_Memo_${invoice.invoiceNo}`);
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
 
   useEffect(() => {
     if (!invoice) return;
@@ -134,19 +145,18 @@ export const SingleInvoiceModal: React.FC<SingleInvoiceModalProps> = ({
           <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
-              onClick={() =>
-                downloadElementAsPDF('printable-single-invoice', `Invoice_Memo_${invoice.invoiceNo}`)
-              }
-              className="bg-rose-500 hover:bg-rose-400 text-slate-950 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-md"
+              disabled={isGeneratingPdf}
+              onClick={handleDownloadPDF}
+              className="bg-rose-500 hover:bg-rose-400 disabled:opacity-50 text-slate-950 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-md"
               title="Download / Save as PDF"
             >
               <FileText className="w-4 h-4" />
-              <span>ডাউনলোড পিডিএফ (Download PDF)</span>
+              <span>{isGeneratingPdf ? 'তৈরি হচ্ছে...' : 'ডাউনলোড পিডিএফ (Download PDF)'}</span>
             </button>
 
             <button
               type="button"
-              onClick={() => window.print()}
+              onClick={() => printElementDirectly('printable-single-invoice', `Invoice_Memo_${invoice.invoiceNo}`)}
               className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-md"
             >
               <Printer className="w-4 h-4" />
@@ -339,13 +349,12 @@ export const SingleInvoiceModal: React.FC<SingleInvoiceModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() =>
-                downloadElementAsPDF('printable-single-invoice', `Invoice_Memo_${invoice.invoiceNo}`)
-              }
-              className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-md"
+              disabled={isGeneratingPdf}
+              onClick={handleDownloadPDF}
+              className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-md"
             >
               <FileText className="w-4 h-4" />
-              <span>ডাউনলোড পিডিএফ (Download PDF)</span>
+              <span>{isGeneratingPdf ? 'পিডিএফ তৈরি হচ্ছে...' : 'ডাউনলোড পিডিএফ (Download PDF)'}</span>
             </button>
           </div>
 

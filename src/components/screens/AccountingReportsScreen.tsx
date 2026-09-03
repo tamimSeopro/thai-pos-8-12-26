@@ -21,7 +21,7 @@ import {
   Sparkles,
   RefreshCw,
 } from 'lucide-react';
-import { Invoice, Expense, Product, Customer, AutoReportSnapshot } from '../../types';
+import { Invoice, Expense, Product, Customer, AutoReportSnapshot, Store } from '../../types';
 import { api } from '../../lib/api';
 import { autoReportService } from '../../lib/autoReportService';
 import { usePermissions } from '../../context/PermissionsContext';
@@ -29,7 +29,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { StatCard } from '../common/StatCard';
 import { EmptyState } from '../common/EmptyState';
 import { fmtNum, fmtDate } from '../../lib/formatters';
-import { downloadElementAsPDF } from '../../lib/pdfHelper';
+import { downloadElementAsPDF, printElementDirectly } from '../../lib/pdfHelper';
 import { SingleInvoiceModal } from '../common/SingleInvoiceModal';
 
 export const AccountingReportsScreen: React.FC = () => {
@@ -40,6 +40,7 @@ export const AccountingReportsScreen: React.FC = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [storeInfo, setStoreInfo] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
 
   // 12-Hour Auto Report Snapshots State
@@ -81,16 +82,21 @@ export const AccountingReportsScreen: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [invs, exps, prods, custs] = await Promise.all([
+      const [invs, exps, prods, custs, stores] = await Promise.all([
         api.getInvoices(activeStoreId),
         api.getExpenses(activeStoreId),
         api.getProducts(activeStoreId),
         api.getCustomers(activeStoreId),
+        api.getStores(),
       ]);
       setInvoices(invs);
       setExpenses(exps);
       setProducts(prods);
       setCustomers(custs);
+      const curStore = stores.find((s) => s.id === activeStoreId);
+      if (curStore) {
+        setStoreInfo(curStore);
+      }
 
       // Refresh archived snapshots
       const list = autoReportService.getSnapshots(activeStoreId);
@@ -217,6 +223,83 @@ export const AccountingReportsScreen: React.FC = () => {
 
   const totalExpenses = filteredExpenses.reduce((acc, exp) => acc + exp.amount, 0);
   const netProfit = totalRevenue - totalPurchaseCost - totalExpenses;
+
+  // Dynamic 7-Day Trend Aggregation from Invoices & Transactions
+  const last7DaysData = React.useMemo(() => {
+    const days: {
+      dateStr: string;
+      label: string;
+      fullDate: string;
+      totalSales: number;
+      count: number;
+    }[] = [];
+    const baseDate = new Date();
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(baseDate);
+      d.setDate(d.getDate() - i);
+      const isoDate = d.toISOString().split('T')[0];
+      const dayName = d.toLocaleDateString('bn-BD', { weekday: 'short' });
+      const dayNum = d.toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' });
+
+      // Match invoices for this day
+      const dayInvoices = invoices.filter(
+        (inv) => inv.createdAt && inv.createdAt.split('T')[0] === isoDate
+      );
+      const dayTotal = dayInvoices.reduce((sum, inv) => sum + (inv.grandTotal || 0), 0);
+
+      days.push({
+        dateStr: isoDate,
+        label: dayName,
+        fullDate: dayNum,
+        totalSales: dayTotal,
+        count: dayInvoices.length,
+      });
+    }
+    return days;
+  }, [invoices]);
+
+  const max7DaySales = Math.max(...last7DaysData.map((d) => d.totalSales), 1);
+  const total7DaySales = last7DaysData.reduce((sum, d) => sum + d.totalSales, 0);
+
+  // Dynamic Category Sales Share from Invoices
+  const categoryShare = React.useMemo(() => {
+    const counts: Record<string, number> = {
+      glass: 0,
+      thai: 0,
+      aluminum: 0,
+      accessories: 0,
+    };
+    let totalCatAmount = 0;
+
+    filteredInvoices.forEach((inv) => {
+      if (inv.items && Array.isArray(inv.items)) {
+        inv.items.forEach((item) => {
+          const prod = products.find((p) => p.id === item.productId);
+          const cat = prod?.category || 'glass';
+          const amt = item.total || 0;
+          counts[cat] = (counts[cat] || 0) + amt;
+          totalCatAmount += amt;
+        });
+      }
+    });
+
+    if (totalCatAmount === 0) {
+      return [
+        { key: 'glass', name: 'গ্লাস (Glass)', pct: 0, color: 'bg-emerald-500', text: 'text-emerald-400' },
+        { key: 'thai', name: 'থাই (Thai Section)', pct: 0, color: 'bg-sky-500', text: 'text-sky-400' },
+        { key: 'aluminum', name: 'অ্যালুমিনিয়াম (Aluminum)', pct: 0, color: 'bg-amber-500', text: 'text-amber-400' },
+        { key: 'accessories', name: 'এক্সেসরিজ (Accessories)', pct: 0, color: 'bg-rose-500', text: 'text-rose-400' },
+      ];
+    }
+
+    return [
+      { key: 'glass', name: 'গ্লাস (Glass)', pct: Math.round((counts.glass / totalCatAmount) * 100), color: 'bg-emerald-500', text: 'text-emerald-400' },
+      { key: 'thai', name: 'থাই (Thai Section)', pct: Math.round((counts.thai / totalCatAmount) * 100), color: 'bg-sky-500', text: 'text-sky-400' },
+      { key: 'aluminum', name: 'অ্যালুমিনিয়াম (Aluminum)', pct: Math.round((counts.aluminum / totalCatAmount) * 100), color: 'bg-amber-500', text: 'text-amber-400' },
+      { key: 'accessories', name: 'এক্সেসরিজ (Accessories)', pct: Math.round((counts.accessories / totalCatAmount) * 100), color: 'bg-rose-500', text: 'text-rose-400' },
+    ];
+  }, [filteredInvoices, products]);
 
   // Add Expense Handler
   const handleAddExpense = async (e: React.FormEvent) => {
@@ -529,26 +612,67 @@ export const AccountingReportsScreen: React.FC = () => {
       {/* Two-Column Analysis Panel */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left: Sales Trend Analysis (7 cols) */}
-        <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg shadow-slate-950/40">
-          <h3 className="text-sm font-bold text-slate-200 mb-4 pb-3 border-b border-slate-800 flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-emerald-400" />
-            <span>{t('chartSalesTrendTitle')}</span>
-          </h3>
+        <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg shadow-slate-950/40 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4 flex-wrap gap-2">
+              <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-emerald-400" />
+                <span>{t('chartSalesTrendTitle')}</span>
+              </h3>
+              <span className="text-xs font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 font-bold">
+                ৭ দিনের মোট: ৳ {fmtNum(total7DaySales)}
+              </span>
+            </div>
 
-          {/* Visual Bar Chart simulation */}
-          <div className="h-48 flex items-end justify-between gap-2 pt-6 px-2">
-            {[65, 80, 45, 95, 70, 85, 100].map((val, idx) => (
-              <div key={idx} className="flex-1 flex flex-col items-center gap-2 group">
-                <span className="text-[10px] text-emerald-400 font-mono opacity-0 group-hover:opacity-100 transition">
-                  ৳{val * 500}
-                </span>
-                <div
-                  style={{ height: `${val}%` }}
-                  className="w-full bg-gradient-to-t from-emerald-600 to-teal-400 rounded-t-lg transition-all duration-300 group-hover:brightness-125"
-                />
-                <span className="text-[10px] text-slate-500 font-medium">দিন {idx + 1}</span>
+            {loading ? (
+              <div className="h-48 flex items-center justify-center text-xs text-slate-500 gap-2">
+                <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" />
+                <span>বিক্রয় ট্রেন্ড লোড হচ্ছে...</span>
               </div>
-            ))}
+            ) : (
+              <div className="space-y-2">
+                {/* Visual Bar Chart */}
+                <div className="h-48 flex items-end justify-between gap-2 pt-6 px-2">
+                  {last7DaysData.map((day, idx) => {
+                    const heightPercent =
+                      max7DaySales > 0 && day.totalSales > 0
+                        ? Math.max(8, Math.round((day.totalSales / max7DaySales) * 100))
+                        : 4;
+
+                    return (
+                      <div key={idx} className="flex-1 flex flex-col items-center gap-2 group relative">
+                        <span className="text-[10px] text-emerald-400 font-mono opacity-0 group-hover:opacity-100 transition whitespace-nowrap absolute -top-4 pointer-events-none">
+                          ৳{fmtNum(day.totalSales)}
+                        </span>
+                        <div
+                          style={{ height: `${heightPercent}%` }}
+                          title={`${day.fullDate} (${day.label}): ৳${fmtNum(day.totalSales)} (${day.count} টি মেমো)`}
+                          className={`w-full rounded-t-lg transition-all duration-300 ${
+                            day.totalSales > 0
+                              ? 'bg-gradient-to-t from-emerald-600 to-teal-400 group-hover:brightness-125'
+                              : 'bg-slate-800/80'
+                          }`}
+                        />
+                        <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap">
+                          {day.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {total7DaySales === 0 && (
+                  <p className="text-[11px] text-slate-500 text-center pt-2">
+                    গত ৭ দিনে কোনো বিক্রয়ের রেকর্ড পাওয়া যায়নি।
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400 mt-2">
+            <span>দৈনিক বিক্রয় অনুপাত</span>
+            <span className="font-mono">সর্বোচ্চ দিন: ৳ {fmtNum(max7DaySales > 1 ? max7DaySales : 0)}</span>
           </div>
         </div>
 
@@ -559,46 +683,21 @@ export const AccountingReportsScreen: React.FC = () => {
             <span>{t('chartCategoryShareTitle')}</span>
           </h3>
 
-          <div className="space-y-3">
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-slate-300 font-semibold">গ্লাস (Glass)</span>
-                <span className="font-mono text-emerald-400">55%</span>
+          <div className="space-y-3.5">
+            {categoryShare.map((cat) => (
+              <div key={cat.key}>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="text-slate-300 font-semibold">{cat.name}</span>
+                  <span className={`font-mono ${cat.text}`}>{cat.pct}%</span>
+                </div>
+                <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden">
+                  <div
+                    style={{ width: `${cat.pct}%` }}
+                    className={`h-full ${cat.color} transition-all duration-500`}
+                  />
+                </div>
               </div>
-              <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-500 w-[55%]" />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-slate-300 font-semibold">থাই (Thai Section)</span>
-                <span className="font-mono text-sky-400">28%</span>
-              </div>
-              <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden">
-                <div className="h-full bg-sky-500 w-[28%]" />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-slate-300 font-semibold">অ্যালুমিনিয়াম (Aluminum)</span>
-                <span className="font-mono text-amber-400">12%</span>
-              </div>
-              <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden">
-                <div className="h-full bg-amber-500 w-[12%]" />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-slate-300 font-semibold">এক্সেসরিজ (Accessories)</span>
-                <span className="font-mono text-rose-400">5%</span>
-              </div>
-              <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden">
-                <div className="h-full bg-rose-500 w-[5%]" />
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </div>
@@ -960,7 +1059,7 @@ export const AccountingReportsScreen: React.FC = () => {
                   <span>ডাউনলোড পিডিএফ (Download PDF)</span>
                 </button>
                 <button
-                  onClick={() => window.print()}
+                  onClick={() => printElementDirectly('printable-full-financial-report', 'Full_Financial_Report')}
                   className="bg-sky-500 hover:bg-sky-400 text-slate-950 px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-md"
                 >
                   <Printer className="w-4 h-4" />
@@ -982,10 +1081,10 @@ export const AccountingReportsScreen: React.FC = () => {
               {/* Top Store Header */}
               <div className="text-center space-y-1">
                 <h1 className="text-2xl font-black tracking-wider text-slate-900 uppercase">
-                  {activeStoreName || 'GLASS HOUSE DHAKA'}
+                  {storeInfo?.name || activeStoreName || 'GLASS HOUSE DHAKA'}
                 </h1>
                 <p className="text-xs font-semibold text-slate-700">
-                  12/A, Dhanmondi, Dhaka | Mobile: 01711223344
+                  {storeInfo?.address ? `ঠিকানা: ${storeInfo.address}` : '12/A, Dhanmondi, Dhaka'} | মোবাইল: {storeInfo?.phone || '01711223344'}
                 </p>
                 <div className="border-b-2 border-slate-900 pt-2" />
               </div>
@@ -1269,7 +1368,7 @@ export const AccountingReportsScreen: React.FC = () => {
                   <span>ডাউনলোড পিডিএফ (Download PDF)</span>
                 </button>
                 <button
-                  onClick={() => window.print()}
+                  onClick={() => printElementDirectly('printable-operating-expenses-report', 'Operating_Expenses_Report')}
                   className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-md"
                 >
                   <Printer className="w-4 h-4" />
@@ -1291,10 +1390,10 @@ export const AccountingReportsScreen: React.FC = () => {
               {/* Header */}
               <div className="text-center space-y-1">
                 <h1 className="text-2xl font-black tracking-wider text-slate-900 uppercase">
-                  {activeStoreName || 'GLASS HOUSE DHAKA'}
+                  {storeInfo?.name || activeStoreName || 'GLASS HOUSE DHAKA'}
                 </h1>
                 <p className="text-xs font-semibold text-slate-700">
-                  12/A, Dhanmondi, Dhaka | Mobile: 01711223344
+                  {storeInfo?.address ? `ঠিকানা: ${storeInfo.address}` : '12/A, Dhanmondi, Dhaka'} | মোবাইল: {storeInfo?.phone || '01711223344'}
                 </p>
                 <div className="border-b-2 border-slate-900 pt-2" />
               </div>

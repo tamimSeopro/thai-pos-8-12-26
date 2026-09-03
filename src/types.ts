@@ -116,6 +116,7 @@ export interface Invoice {
   paidAmount: number;
   dueAmount: number;
   paymentStatus: 'paid' | 'partial' | 'due';
+  paymentMethod?: 'cash' | 'bkash' | 'nagad' | 'bank';
   createdAt: string; // ISO date string
   createdByName: string;
 }
@@ -146,14 +147,17 @@ export interface Expense {
 export interface Transaction {
   id: string;
   storeId: string;
-  customerId: string;
+  customerId?: string;
   customerName: string;
   invoiceNo?: string;
   amount: number;
-  type: 'payment' | 'due_collection';
-  paymentMethod: 'cash' | 'bkash' | 'nagad' | 'bank';
+  type: 'payment' | 'due_collection' | 'new_sale' | 'advance' | 'purchase' | 'expense' | 'return_adjustment';
+  paymentMethod: 'cash' | 'bkash' | 'nagad' | 'bank' | string;
   date: string;
   note?: string;
+  createdBy?: string;
+  debitAccount?: string;
+  creditAccount?: string;
 }
 
 export interface AuditLog {

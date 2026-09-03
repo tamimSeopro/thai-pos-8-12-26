@@ -13,6 +13,8 @@ import {
   Clock,
   Calendar,
   CreditCard,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Customer, Invoice, Transaction } from '../../types';
 import { api } from '../../lib/api';
@@ -39,6 +41,10 @@ export const DueLedgerScreen: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bkash' | 'nagad' | 'bank'>('cash');
   const [note, setNote] = useState('');
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Pagination for transaction ledger (20 records per page)
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 20;
 
   const loadData = async () => {
     try {
@@ -471,33 +477,78 @@ export const DueLedgerScreen: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/80">
-                {transactions.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-slate-950/40 transition">
-                    <td className="p-3 font-mono text-amber-300 font-medium">
-                      {fmtDate(tx.date, {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                      })}
-                    </td>
-                    <td className="p-3 font-bold text-slate-200">{tx.customerName}</td>
-                    <td className="p-3 font-mono text-emerald-400">{tx.invoiceNo || 'বকেয়া খাতা আদায়'}</td>
-                    <td className="p-3">
-                      <span className="bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
-                        {tx.paymentMethod}
-                      </span>
-                    </td>
-                    <td className="p-3 text-right font-mono font-bold text-emerald-400 text-sm">
-                      ৳ {fmtNum(tx.amount)}
-                    </td>
-                    <td className="p-3 text-slate-400 italic">{tx.note || '-'}</td>
-                  </tr>
-                ))}
+                {(() => {
+                  const totalPages = Math.max(1, Math.ceil(transactions.length / PAGE_SIZE));
+                  const startIndex = (currentPage - 1) * PAGE_SIZE;
+                  const paginatedTransactions = transactions.slice(startIndex, startIndex + PAGE_SIZE);
+
+                  return paginatedTransactions.map((tx) => (
+                    <tr key={tx.id} className="hover:bg-slate-950/40 transition">
+                      <td className="p-3 font-mono text-amber-300 font-medium">
+                        {fmtDate(tx.date, {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                        })}
+                      </td>
+                      <td className="p-3 font-bold text-slate-200">{tx.customerName}</td>
+                      <td className="p-3 font-mono text-emerald-400">{tx.invoiceNo || 'বকেয়া খাতা আদায়'}</td>
+                      <td className="p-3">
+                        <span className="bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                          {tx.paymentMethod}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right font-mono font-bold text-emerald-400 text-sm">
+                        ৳ {fmtNum(tx.amount)}
+                      </td>
+                      <td className="p-3 text-slate-400 italic">{tx.note || '-'}</td>
+                    </tr>
+                  ));
+                })()}
               </tbody>
             </table>
+
+            {/* Pagination Controls */}
+            {transactions.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between p-3 border-t border-slate-800 bg-slate-950/40">
+                <p className="text-xs text-slate-400">
+                  পৃষ্ঠা <span className="font-bold text-slate-200">{fmtNum(currentPage)}</span> এর{' '}
+                  <span className="font-bold text-slate-200">
+                    {fmtNum(Math.max(1, Math.ceil(transactions.length / PAGE_SIZE)))}
+                  </span>{' '}
+                  (মোট {fmtNum(transactions.length)} টি রেকর্ড, প্রতি পৃষ্ঠায় ২০ টি)
+                </p>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage <= 1}
+                    className="px-2.5 py-1 rounded-lg border border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-xs flex items-center gap-1 transition"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    <span>পূর্ববর্তী</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCurrentPage((p) =>
+                        Math.min(Math.ceil(transactions.length / PAGE_SIZE), p + 1)
+                      )
+                    }
+                    disabled={currentPage >= Math.ceil(transactions.length / PAGE_SIZE)}
+                    className="px-2.5 py-1 rounded-lg border border-slate-800 bg-slate-900 text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-xs flex items-center gap-1 transition"
+                  >
+                    <span>পরবর্তী</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

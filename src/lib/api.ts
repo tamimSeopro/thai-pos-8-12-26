@@ -9,7 +9,7 @@ import {
   User,
   AuditLog,
 } from '../types';
-import { addNotification } from './notificationService';
+import { addNotification, addPaymentNotification } from './notificationService';
 
 /**
  * Single typed API client for Thai Glass POS REST endpoints
@@ -579,22 +579,44 @@ export const api = {
     allInvoices.unshift(newInvoice);
     setStored(STORAGE_KEYS.INVOICES, allInvoices);
 
-    // Log transaction
+    // Log transaction with double-entry accounting
     if (newInvoice.paidAmount > 0) {
       const transactions = getStored<Transaction[]>(STORAGE_KEYS.TRANSACTIONS, INITIAL_TRANSACTIONS);
+      const paymentMethod = newInvoice.paymentMethod || 'cash';
       transactions.unshift({
-        id: `tx_${Date.now()}`,
+        id: `tx_${Date.now()}_sale`,
         storeId: newInvoice.storeId,
         customerId: newInvoice.customerId || 'cust_guest',
         customerName: newInvoice.customerName,
         invoiceNo: newInvoice.invoiceNo,
         amount: newInvoice.paidAmount,
         type: 'payment',
-        paymentMethod: 'cash',
-        date: new Date().toISOString(),
-        note: 'বিক্রির নগদ জমা',
+        paymentMethod,
+        date: newInvoice.createdAt,
+        note: `বিক্রি মেমো #${newInvoice.invoiceNo} নগদ জমা`,
+        createdBy: newInvoice.createdByName || 'Cash Counter',
+        debitAccount: paymentMethod === 'bank' ? 'Bank' : 'Cash',
+        creditAccount: 'Sales Account',
       });
       setStored(STORAGE_KEYS.TRANSACTIONS, transactions);
+
+      // Detailed Payment Notification (Customer, Invoice, Payment Type, Amount, Received By, Date)
+      addPaymentNotification(newInvoice.storeId, {
+        customerName: newInvoice.customerName,
+        invoiceNo: newInvoice.invoiceNo,
+        paymentType: 'New Sale Payment',
+        amount: newInvoice.paidAmount,
+        receivedBy: newInvoice.createdByName || 'Cash Counter',
+        date: new Date(newInvoice.createdAt).toLocaleString('en-US', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        }),
+        paymentMethod,
+      });
     }
 
     addNotification(
@@ -630,12 +652,24 @@ export const api = {
     return all.filter((c) => c.storeId === storeId);
   },
 
+  async createCustomer(data: Omit<Customer, 'id'>): Promise<Customer> {
+    const customers = getStored<Customer[]>(STORAGE_KEYS.CUSTOMERS, INITIAL_CUSTOMERS);
+    const newCustomer: Customer = {
+      ...data,
+      id: `cust_${Date.now()}`,
+    };
+    customers.unshift(newCustomer);
+    setStored(STORAGE_KEYS.CUSTOMERS, customers);
+    return newCustomer;
+  },
+
   async collectCustomerDue(
     storeId: string,
     customerId: string,
     amount: number,
-    paymentMethod: 'cash' | 'bkash' | 'nagad' | 'bank',
-    note?: string
+    paymentMethod: 'cash' | 'bkash' | 'nagad' | 'bank' | string = 'cash',
+    note?: string,
+    receivedByName?: string
   ): Promise<Customer> {
     const customers = getStored<Customer[]>(STORAGE_KEYS.CUSTOMERS, INITIAL_CUSTOMERS);
     const index = customers.findIndex((c) => c.id === customerId);
@@ -646,37 +680,44 @@ export const api = {
 
     const txDate = new Date().toISOString();
 
-    // Add transaction
+    // Add transaction to ledger with double-entry accounting
     const transactions = getStored<Transaction[]>(STORAGE_KEYS.TRANSACTIONS, INITIAL_TRANSACTIONS);
+    const referenceInvoice = note && (note.includes('TG-') || note.includes('INV')) ? note : undefined;
+    
     transactions.unshift({
-      id: `tx_${Date.now()}`,
+      id: `tx_${Date.now()}_due`,
       storeId,
       customerId,
       customerName: customers[index].name,
+      invoiceNo: referenceInvoice,
       amount,
       type: 'due_collection',
       paymentMethod,
       date: txDate,
       note: note || 'বকেয়া খাতা আদায়',
+      createdBy: receivedByName || 'Cash Counter',
+      debitAccount: paymentMethod === 'bank' ? 'Bank' : 'Cash',
+      creditAccount: 'Customer Due',
     });
     setStored(STORAGE_KEYS.TRANSACTIONS, transactions);
 
-    const formattedTxDate = (() => {
-      const d = new Date(txDate);
-      return isNaN(d.getTime()) ? '-' : d.toLocaleString('bn-BD');
-    })();
-
-    addNotification(
-      storeId,
-      'বকেয়া টাকা আদায় জমা (Input)',
-      `গ্রাহক ${customers[index].name} এর থেকে ৳${amount} আদায় হয়েছে (${(paymentMethod || '').toUpperCase()}) | সময়: ${formattedTxDate}`,
-      'due',
-      {
-        amount,
-        customerName: customers[index].name,
-        paymentMethod,
-      }
-    );
+    // Detailed Payment Notification (Customer, Invoice, Payment Type, Amount, Received By, Date)
+    addPaymentNotification(storeId, {
+      customerName: customers[index].name,
+      invoiceNo: referenceInvoice || 'Due Collection',
+      paymentType: 'Due Payment',
+      amount,
+      receivedBy: receivedByName || 'Cash Counter',
+      date: new Date(txDate).toLocaleString('en-US', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      }),
+      paymentMethod,
+    });
 
     return customers[index];
   },
@@ -707,6 +748,23 @@ export const api = {
       }
       setStored(STORAGE_KEYS.PRODUCTS, products);
     }
+
+    // Record Product Purchase Transaction in Ledger (Double-entry: Debit Inventory, Credit Cash/Supplier)
+    const transactions = getStored<Transaction[]>(STORAGE_KEYS.TRANSACTIONS, INITIAL_TRANSACTIONS);
+    transactions.unshift({
+      id: `tx_${Date.now()}_purchase`,
+      storeId: newArrival.storeId,
+      customerName: newArrival.supplierName || 'মহাজন / সরবরাহকারী',
+      amount: newArrival.totalCost,
+      type: 'purchase',
+      paymentMethod: 'cash',
+      date: newArrival.date ? new Date(newArrival.date).toISOString() : new Date().toISOString(),
+      note: `পণ্য ক্রয়: ${newArrival.productName} (${newArrival.receivedQty} পিস)`,
+      createdBy: 'Inventory Manager',
+      debitAccount: 'Inventory',
+      creditAccount: 'Cash/Supplier',
+    });
+    setStored(STORAGE_KEYS.TRANSACTIONS, transactions);
 
     addNotification(
       data.storeId,
@@ -739,6 +797,23 @@ export const api = {
     expenses.unshift(newExpense);
     setStored(STORAGE_KEYS.EXPENSES, expenses);
 
+    // Record Expense Transaction in Ledger (Double-entry: Debit Operating Expense, Credit Cash)
+    const transactions = getStored<Transaction[]>(STORAGE_KEYS.TRANSACTIONS, INITIAL_TRANSACTIONS);
+    transactions.unshift({
+      id: `tx_${Date.now()}_exp`,
+      storeId: newExpense.storeId,
+      customerName: 'পরিচালন ব্যয়',
+      amount: newExpense.amount,
+      type: 'expense',
+      paymentMethod: 'cash',
+      date: newExpense.date ? new Date(newExpense.date).toISOString() : new Date().toISOString(),
+      note: `খরচ: ${newExpense.description} (${newExpense.type})`,
+      createdBy: 'Accounts',
+      debitAccount: 'Operating Expense',
+      creditAccount: 'Cash',
+    });
+    setStored(STORAGE_KEYS.TRANSACTIONS, transactions);
+
     addNotification(
       data.storeId,
       'নতুন পরিচালন ব্যয় (Output)',
@@ -751,6 +826,57 @@ export const api = {
     );
 
     return newExpense;
+  },
+
+  async recordAdvancePayment(
+    storeId: string,
+    customerId: string,
+    amount: number,
+    paymentMethod: 'cash' | 'bkash' | 'nagad' | 'bank' | string = 'cash',
+    note?: string,
+    receivedByName?: string
+  ): Promise<Transaction> {
+    const customers = getStored<Customer[]>(STORAGE_KEYS.CUSTOMERS, INITIAL_CUSTOMERS);
+    const customer = customers.find((c) => c.id === customerId);
+    const customerName = customer ? customer.name : 'অগ্রিম প্রদানকারী গ্রাহক';
+    const txDate = new Date().toISOString();
+
+    const transactions = getStored<Transaction[]>(STORAGE_KEYS.TRANSACTIONS, INITIAL_TRANSACTIONS);
+    const newTx: Transaction = {
+      id: `tx_${Date.now()}_adv`,
+      storeId,
+      customerId,
+      customerName,
+      amount,
+      type: 'advance',
+      paymentMethod,
+      date: txDate,
+      note: note || 'গ্রাহকের অগ্রিম জমা',
+      createdBy: receivedByName || 'Cash Counter',
+      debitAccount: paymentMethod === 'bank' ? 'Bank' : 'Cash',
+      creditAccount: 'Customer Advance',
+    };
+    transactions.unshift(newTx);
+    setStored(STORAGE_KEYS.TRANSACTIONS, transactions);
+
+    addPaymentNotification(storeId, {
+      customerName,
+      invoiceNo: 'Advance Payment',
+      paymentType: 'Advance Payment',
+      amount,
+      receivedBy: receivedByName || 'Cash Counter',
+      date: new Date(txDate).toLocaleString('en-US', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      }),
+      paymentMethod,
+    });
+
+    return newTx;
   },
 
   async deleteExpense(id: string): Promise<void> {

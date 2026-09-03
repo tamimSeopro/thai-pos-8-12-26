@@ -19,6 +19,9 @@ export interface AppNotification {
     qty?: number;
     paymentMethod?: string;
     category?: string;
+    paymentType?: 'New Sale Payment' | 'Due Collection' | 'Advance Payment' | 'Return Adjustment' | string;
+    receivedBy?: string;
+    date?: string;
   };
 }
 
@@ -151,4 +154,54 @@ export function clearNotifications(storeId: string): void {
   } catch (e) {
     console.error(e);
   }
+}
+
+export function formatNotificationDateTime(isoOrDate?: string | Date): string {
+  const d = isoOrDate ? new Date(isoOrDate) : new Date();
+  if (isNaN(d.getTime())) return '-';
+  const day = String(d.getDate()).padStart(2, '0');
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = monthNames[d.getMonth()];
+  const year = d.getFullYear();
+  let hours = d.getHours();
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12 || 12;
+  const formattedHours = String(hours).padStart(2, '0');
+  return `${day} ${month} ${year} ${formattedHours}:${minutes} ${ampm}`;
+}
+
+export function addPaymentNotification(
+  storeId: string,
+  params: {
+    customerName: string;
+    invoiceNo?: string;
+    paymentType: 'New Sale Payment' | 'Due Collection' | 'Advance Payment' | 'Return Adjustment' | string;
+    amount: number;
+    receivedBy?: string;
+    date?: string;
+    paymentMethod?: string;
+  }
+): AppNotification {
+  const formattedDate = params.date || formatNotificationDateTime();
+  const receivedBy = params.receivedBy || 'Cash Counter';
+  const invoiceNo = params.invoiceNo || 'N/A';
+
+  const message = `Payment Received Successfully\nCustomer: ${params.customerName}\nInvoice: ${invoiceNo}\nPayment Type: ${params.paymentType}\nAmount: ৳${params.amount}\nReceived By: ${receivedBy}\nDate: ${formattedDate}`;
+
+  return addNotification(
+    storeId,
+    'Payment Received Successfully',
+    message,
+    params.paymentType === 'Due Collection' ? 'due' : 'sale',
+    {
+      customerName: params.customerName,
+      invoiceNo,
+      paymentType: params.paymentType,
+      amount: params.amount,
+      receivedBy,
+      date: formattedDate,
+      paymentMethod: params.paymentMethod || 'cash',
+    }
+  );
 }

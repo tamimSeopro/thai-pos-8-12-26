@@ -22,7 +22,8 @@ import { usePermissions } from '../../context/PermissionsContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { EmptyState } from '../common/EmptyState';
 import { fmtNum } from '../../lib/formatters';
-import { downloadElementAsPDF } from '../../lib/pdfHelper';
+import { downloadElementAsPDF, printElementDirectly } from '../../lib/pdfHelper';
+import { Store } from '../../types';
 
 const formatAddress = (addr?: string): string => {
   if (!addr || !addr.trim() || addr === 'N/A') return 'N/A';
@@ -69,12 +70,30 @@ export const PosBillingScreen: React.FC = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [discount, setDiscount] = useState<number>(0);
   const [paidAmount, setPaidAmount] = useState<number>(0);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bkash' | 'nagad' | 'bank'>('cash');
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   // Memo Preview & Print Modal
   const [savedInvoice, setSavedInvoice] = useState<Invoice | null>(null);
+  const [storeInfo, setStoreInfo] = useState<Store | null>(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [showSignatureOption, setShowSignatureOption] = useState(true);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadStoreDetails() {
+      try {
+        const stores = await api.getStores();
+        const found = stores.find((s) => s.id === activeStoreId);
+        if (found) {
+          setStoreInfo(found);
+        }
+      } catch (err) {
+        console.error('Error fetching store details:', err);
+      }
+    }
+    loadStoreDetails();
+  }, [activeStoreId]);
 
   useEffect(() => {
     async function fetchProducts() {
@@ -268,6 +287,7 @@ export const PosBillingScreen: React.FC = () => {
         dueAmount,
         paymentStatus:
           dueAmount === 0 ? ('paid' as const) : paidAmount > 0 ? ('partial' as const) : ('due' as const),
+        paymentMethod,
         createdByName: currentUser?.name || 'স্টাফ',
       };
 
@@ -282,6 +302,7 @@ export const PosBillingScreen: React.FC = () => {
       setCustomerAddress('');
       setDiscount(0);
       setPaidAmount(0);
+      setPaymentMethod('cash');
 
       setSuccessMsg(`মেমো #${invoice.invoiceNo} সফলভাবে সংরক্ষিত হয়েছে!`);
       setTimeout(() => setSuccessMsg(null), 4000);
@@ -838,6 +859,22 @@ export const PosBillingScreen: React.FC = () => {
                 />
               </div>
 
+              {paidAmount > 0 && (
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <span className="text-slate-400 text-[11px]">পেমেন্ট মাধ্যম:</span>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value as any)}
+                    className="w-32 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="cash">নগদ (Cash)</option>
+                    <option value="bkash">বিকাশ (bKash)</option>
+                    <option value="nagad">নগদ (Nagad)</option>
+                    <option value="bank">ব্যাংক (Bank)</option>
+                  </select>
+                </div>
+              )}
+
               <div className="flex justify-between text-xs font-bold text-rose-400 pt-1">
                 <span>{t('dueAmountTk')}:</span>
                 <span className="font-mono">৳ {fmtNum(dueAmount)}</span>
@@ -892,7 +929,7 @@ export const PosBillingScreen: React.FC = () => {
                 </button>
 
                 <button
-                  onClick={() => window.print()}
+                  onClick={() => printElementDirectly('printable-cash-memo', `Cash_Memo_${savedInvoice.invoiceNo}`)}
                   className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-md"
                 >
                   <Printer className="w-4 h-4" />
@@ -915,13 +952,13 @@ export const PosBillingScreen: React.FC = () => {
               {/* Receipt Header */}
               <div className="text-center space-y-1 pb-1">
                 <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                  {activeStoreName || "মেসার্স করিম থাই গ্লাস এন্ড অ্যালুমিনিয়াম"}
+                  {storeInfo?.name || activeStoreName || "মেসার্স করিম থাই গ্লাস এন্ড অ্যালুমিনিয়াম"}
                 </h2>
                 <p className="text-xs text-slate-800 font-semibold">
                   থাই গ্লাস, অ্যালুমিনিয়াম প্রফাইল ও ডোর ফিটিংস পাইকারি ও খুচরা বিক্রেতা
                 </p>
                 <p className="text-xs text-slate-800 font-medium">
-                  ঠিকানা: নয়া বাজার, গুলশান, ঢাকা | মোবাইল: 01711223344
+                  ঠিকানা: {storeInfo?.address || 'নয়া বাজার, গুলশান, ঢাকা'} | মোবাইল: {storeInfo?.phone || '০১৭১১২২৩৩৪৪'}
                 </p>
               </div>
 
@@ -1061,11 +1098,20 @@ export const PosBillingScreen: React.FC = () => {
             <div className="p-3 bg-slate-800 border-t border-slate-700 flex justify-between items-center no-print">
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => downloadElementAsPDF('printable-cash-memo', `Cash_Memo_${savedInvoice.invoiceNo}`)}
-                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-md"
+                  disabled={isGeneratingPdf}
+                  onClick={async () => {
+                    if (isGeneratingPdf || !savedInvoice) return;
+                    setIsGeneratingPdf(true);
+                    try {
+                      await downloadElementAsPDF('printable-cash-memo', `Cash_Memo_${savedInvoice.invoiceNo}`);
+                    } finally {
+                      setIsGeneratingPdf(false);
+                    }
+                  }}
+                  className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-md"
                 >
                   <FileText className="w-4 h-4" />
-                  <span>ডাউনলোড পিডিএফ (Download PDF)</span>
+                  <span>{isGeneratingPdf ? 'পিডিএফ তৈরি হচ্ছে...' : 'ডাউনলোড পিডিএফ (Download PDF)'}</span>
                 </button>
               </div>
               <button
