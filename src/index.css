@@ -65,22 +65,27 @@
     visibility: visible !important;
     position: relative !important;
     width: 100% !important;
+    max-width: 780px !important;
+    margin: 0 auto !important;
     background: #ffffff !important;
-    color: #000000 !important;
-    padding: 10px !important;
+    color: #0f172a !important;
+    padding: 16px !important;
     border: none !important;
     box-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
-  /* Force all child elements in print reports to black text and white/transparent backgrounds */
-  .printable-memo *,
-  .printable-financial-report *,
-  .printable-invoice * {
-    color: #000000 !important;
-    background-color: transparent !important;
-    text-shadow: none !important;
-    border-color: #cbd5e1 !important;
-  }
+  /* Preserve flex and grid in print mode */
+  .flex { display: flex !important; }
+  .inline-flex { display: inline-flex !important; }
+  .grid { display: grid !important; }
+  .justify-between { justify-content: space-between !important; }
+  .justify-end { justify-content: flex-end !important; }
+  .justify-center { justify-content: center !important; }
+  .items-center { align-items: center !important; }
+  .gap-3 { gap: 12px !important; }
+  .gap-2 { gap: 8px !important; }
 
   /* Soft light gray background for headers and metric cards in print mode */
   .printable-memo th,
@@ -102,6 +107,25 @@
   .printable-financial-report .bg-slate-100,
   .printable-invoice .bg-slate-100 {
     background-color: #f8fafc !important;
-    color: #000000 !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Preserve text colors in print mode */
+  .text-emerald-700, .text-emerald-600, .text-emerald-500, .text-emerald-400 {
+    color: #047857 !important;
+  }
+  .text-rose-700, .text-rose-600, .text-rose-500, .text-rose-400 {
+    color: #be123c !important;
+  }
+  .text-amber-700, .text-amber-600, .text-amber-500, .text-amber-400 {
+    color: #b45309 !important;
+  }
+  .text-slate-900, .text-slate-800, .text-slate-700 {
+    color: #0f172a !important;
+  }
+  .text-slate-600, .text-slate-500 {
+    color: #475569 !important;
   }
 }

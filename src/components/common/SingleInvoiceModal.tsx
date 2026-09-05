@@ -299,28 +299,30 @@ export const SingleInvoiceModal: React.FC<SingleInvoiceModalProps> = ({
           </div>
 
           {/* 4. FINANCIAL TOTALS SUMMARY */}
-          <div className="p-4 bg-slate-950/80 border border-slate-800/80 rounded-xl space-y-2 text-xs print:bg-slate-50 print:border-slate-300">
-            <div className="flex justify-between text-slate-300 print:text-slate-800">
-              <span>সাব-টোটাল (Subtotal):</span>
-              <span className="font-mono font-bold">৳ {fmtNum(subtotalVal)}</span>
-            </div>
-            {(invoice.discount ?? 0) > 0 && (
-              <div className="flex justify-between text-amber-400 print:text-slate-800">
-                <span>ডিসকাউন্ট (Discount):</span>
-                <span className="font-mono font-bold">- ৳ {fmtNum(invoice.discount)}</span>
+          <div className="flex justify-end pt-1">
+            <div className="w-full sm:w-72 p-3.5 bg-slate-950/80 border border-slate-800/80 rounded-xl space-y-1.5 text-xs print:bg-slate-50 print:border-slate-300">
+              <div className="flex justify-between text-slate-300 print:text-slate-800">
+                <span>সাব-টোটাল (Subtotal):</span>
+                <span className="font-mono font-bold">৳ {fmtNum(subtotalVal)}</span>
               </div>
-            )}
-            <div className="flex justify-between text-sm font-bold text-slate-100 print:text-slate-900 pt-2 border-t border-slate-800/80 print:border-slate-300">
-              <span>সর্বমোট বিল (Grand Total):</span>
-              <span className="font-mono text-emerald-400 print:text-slate-900">৳ {fmtNum(invoice.grandTotal)}</span>
-            </div>
-            <div className="flex justify-between text-xs text-emerald-400 print:text-slate-800">
-              <span>নগদ পরিশোধিত (Paid Amount):</span>
-              <span className="font-mono font-bold">৳ {fmtNum(invoice.paidAmount)}</span>
-            </div>
-            <div className="flex justify-between text-xs text-rose-400 print:text-slate-900 font-bold">
-              <span>অবশিষ্ট বাকি (Due Amount):</span>
-              <span className="font-mono">৳ {fmtNum(invoice.dueAmount)}</span>
+              {(invoice.discount ?? 0) > 0 && (
+                <div className="flex justify-between text-amber-400 print:text-slate-800">
+                  <span>ডিসকাউন্ট (Discount):</span>
+                  <span className="font-mono font-bold">- ৳ {fmtNum(invoice.discount)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm font-bold text-slate-100 print:text-slate-900 pt-1.5 border-t border-slate-800/80 print:border-slate-300">
+                <span>সর্বমোট বিল (Grand Total):</span>
+                <span className="font-mono text-emerald-400 print:text-slate-900 font-black">৳ {fmtNum(invoice.grandTotal)}</span>
+              </div>
+              <div className="flex justify-between text-xs text-emerald-400 print:text-slate-800">
+                <span>নগদ পরিশোধিত (Paid Amount):</span>
+                <span className="font-mono font-bold">৳ {fmtNum(invoice.paidAmount)}</span>
+              </div>
+              <div className="flex justify-between text-xs text-rose-400 print:text-slate-900 font-bold">
+                <span>অবশিষ্ট বাকি (Due Amount):</span>
+                <span className="font-mono">৳ {fmtNum(invoice.dueAmount)}</span>
+              </div>
             </div>
           </div>
 

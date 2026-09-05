@@ -964,8 +964,8 @@ export const PosBillingScreen: React.FC = () => {
 
               <div className="border-b-2 border-slate-900 my-2"></div>
 
-              {/* Invoice Meta}
-              <div className="p-3.5 bg-slate-50 border border-slate-300 rounded-xl grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-900">
+              {/* Invoice Meta */}
+              <div className="p-3.5 bg-slate-50 border border-slate-300 rounded-xl grid grid-cols-2 gap-3 text-xs text-slate-900">
                 <div className="space-y-1">
                   <p className="flex items-center gap-1.5 flex-wrap">
                     <strong className="shrink-0">গ্রাহকের নাম:</strong>
@@ -1042,32 +1042,34 @@ export const PosBillingScreen: React.FC = () => {
 
               {/* Total Calculation */}
               <div className="flex justify-end pt-2">
-                <div className="w-60 text-[11px] space-y-1 font-semibold">
+                <div className="w-72 bg-slate-50 border border-slate-300 rounded-xl p-3.5 space-y-1.5 font-semibold text-xs text-slate-900">
                   {savedInvoice.items.reduce((sum, item) => sum + (item.sqft || 0), 0) > 0 && (
                     <div className="flex justify-between text-slate-800 font-bold border-b border-slate-300 pb-1 mb-1">
                       <span>মোট স্কোয়ার ফিট (Total SqFt):</span>
-                      <span>{savedInvoice.items.reduce((sum, item) => sum + (item.sqft || 0), 0).toFixed(2)} SqFt</span>
+                      <span className="font-mono">{savedInvoice.items.reduce((sum, item) => sum + (item.sqft || 0), 0).toFixed(2)} SqFt</span>
                     </div>
                   )}
-                  <div className="flex justify-between">
-                    <span>সাব-টোটাল:</span>
-                    <span>৳ {fmtNum(savedInvoice.subtotal)}</span>
+                  <div className="flex justify-between text-slate-700">
+                    <span>সাব-টোটাল (Subtotal):</span>
+                    <span className="font-mono font-bold">৳ {fmtNum(savedInvoice.subtotal)}</span>
                   </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>ডিসকাউন্ট:</span>
-                    <span>- ৳ {fmtNum(savedInvoice.discount)}</span>
+                  {savedInvoice.discount > 0 && (
+                    <div className="flex justify-between text-amber-700">
+                      <span>ডিসকাউন্ট (Discount):</span>
+                      <span className="font-mono font-bold">- ৳ {fmtNum(savedInvoice.discount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t border-slate-400 pt-1.5 text-sm font-bold text-slate-900">
+                    <span>সর্বমোট বিল (Grand Total):</span>
+                    <span className="font-mono font-black text-slate-900">৳ {fmtNum(savedInvoice.grandTotal)}</span>
                   </div>
-                  <div className="flex justify-between border-t border-slate-400 pt-1 text-sm font-bold text-slate-900">
-                    <span>সর্বমোট বিল:</span>
-                    <span>৳ {fmtNum(savedInvoice.grandTotal)}</span>
+                  <div className="flex justify-between text-emerald-700 font-bold">
+                    <span>নগদ জমা (Paid):</span>
+                    <span className="font-mono">৳ {fmtNum(savedInvoice.paidAmount)}</span>
                   </div>
-                  <div className="flex justify-between text-emerald-700">
-                    <span>নগদ জমা:</span>
-                    <span>৳ {fmtNum(savedInvoice.paidAmount)}</span>
-                  </div>
-                  <div className="flex justify-between text-rose-700">
-                    <span>বাকি পাওনা:</span>
-                    <span>৳ {fmtNum(savedInvoice.dueAmount)}</span>
+                  <div className="flex justify-between text-rose-700 font-bold">
+                    <span>বাকি পাওনা (Due):</span>
+                    <span className="font-mono">৳ {fmtNum(savedInvoice.dueAmount)}</span>
                   </div>
                 </div>
               </div>
