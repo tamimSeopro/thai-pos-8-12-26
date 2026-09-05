@@ -23,7 +23,7 @@ import {
   Smartphone,
   Sparkles,
 } from 'lucide-react';
-import { Store } from '../../types';
+import { Store, ScreenId } from '../../types';
 import { api } from '../../lib/api';
 import { usePermissions } from '../../context/PermissionsContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -35,7 +35,11 @@ import {
 } from '../../lib/authService';
 import { generateSupabaseRLSSQL, getSupabaseConfig } from '../../lib/supabaseClient';
 
-export const SuperAdminStoresScreen: React.FC = () => {
+interface SuperAdminStoresScreenProps {
+  onNavigate?: (screen: ScreenId) => void;
+}
+
+export const SuperAdminStoresScreen: React.FC<SuperAdminStoresScreenProps> = ({ onNavigate }) => {
   const { enterSupportMode, currentUser, resetPassword, updateUserProfile, unlockAccount, toggle2FA } = usePermissions();
   const { t } = useLanguage();
 
@@ -65,6 +69,7 @@ export const SuperAdminStoresScreen: React.FC = () => {
 
   // Summary state for newly created store credentials
   const [createdCredentials, setCreatedCredentials] = useState<{
+    store: Store;
     storeName: string;
     adminUsername: string;
     passwordInput: string;
@@ -130,8 +135,12 @@ export const SuperAdminStoresScreen: React.FC = () => {
     if (res.success && res.newStore) {
       setStores([res.newStore, ...stores]);
 
+      // Automatically switch active store to the new store in support mode
+      enterSupportMode(res.newStore);
+
       // Open Created Credentials Summary Modal
       setCreatedCredentials({
+        store: res.newStore,
         storeName: res.newStore.name,
         adminUsername: adminUsername.trim().toLowerCase(),
         passwordInput: adminPassword,
@@ -560,7 +569,10 @@ export const SuperAdminStoresScreen: React.FC = () => {
                       <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2 flex-wrap">
                         {/* 1. Support Mode (View) */}
                         <button
-                          onClick={() => enterSupportMode(store)}
+                          onClick={() => {
+                            enterSupportMode(store);
+                            if (onNavigate) onNavigate('dashboard');
+                          }}
                           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/30 text-xs font-semibold transition"
                         >
                           <Eye className="w-3.5 h-3.5" />
@@ -897,20 +909,33 @@ export const SuperAdminStoresScreen: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 pt-2">
+            <div className="flex flex-col sm:flex-row items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  enterSupportMode(createdCredentials.store);
+                  setCreatedCredentials(null);
+                  if (onNavigate) onNavigate('dashboard');
+                }}
+                className="w-full sm:flex-1 bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-sky-950/40"
+              >
+                <Eye className="w-4 h-4 text-slate-950" />
+                <span>এই শপে প্রবেশ করুন</span>
+              </button>
+
               <button
                 type="button"
                 onClick={copyCredentialsToClipboard}
-                className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40"
+                className="w-full sm:flex-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40"
               >
                 {copiedCreds ? <Check className="w-4 h-4 text-slate-950" /> : <Copy className="w-4 h-4 text-slate-950" />}
-                <span>{copiedCreds ? 'অনুলিপি করা হয়েছে!' : 'ক্রেডেনশিয়াল কপি করুন (Copy)'}</span>
+                <span>{copiedCreds ? 'অনুলিপি করা হয়েছে!' : 'কপি করুন'}</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setCreatedCredentials(null)}
-                className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition"
+                className="w-full sm:w-auto px-4 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl transition"
               >
                 বন্ধ করুন
               </button>

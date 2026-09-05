@@ -1322,7 +1322,7 @@ export const AccountingReportsScreen: React.FC = () => {
                   <span>ডাউনলোড পিডিএফ (Download PDF)</span>
                 </button>
                 <button
-                  onClick={() => window.print()}
+                  onClick={() => printElementDirectly('printable-full-financial-report', 'Full_Financial_Report')}
                   className="bg-sky-500 hover:bg-sky-400 text-slate-950 px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
                 >
                   <Printer className="w-4 h-4" />
@@ -1515,7 +1515,7 @@ export const AccountingReportsScreen: React.FC = () => {
                   <span>ডাউনলোড পিডিএফ (Download PDF)</span>
                 </button>
                 <button
-                  onClick={() => window.print()}
+                  onClick={() => printElementDirectly('printable-operating-expenses-report', 'Operating_Expenses_Report')}
                   className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
                 >
                   <Printer className="w-4 h-4" />

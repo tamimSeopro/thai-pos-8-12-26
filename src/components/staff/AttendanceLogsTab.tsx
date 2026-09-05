@@ -43,7 +43,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { usePermissions } from '../../context/PermissionsContext';
 import { ManualAttendanceModal } from './ManualAttendanceModal';
 import { EditAttendanceModal } from './EditAttendanceModal';
-import { downloadElementAsPDF } from '../../lib/pdfHelper';
+import { downloadElementAsPDF, printElementDirectly } from '../../lib/pdfHelper';
 
 interface AttendanceLogsTabProps {
   activeStoreId: string;
@@ -177,7 +177,7 @@ export const AttendanceLogsTab: React.FC<AttendanceLogsTabProps> = ({
       );
     } catch (e) {
       console.error(e);
-      window.print();
+      printElementDirectly('printable-attendance-sheet', `Staff_Attendance_Report_${dateFilter}`);
     }
   };
 

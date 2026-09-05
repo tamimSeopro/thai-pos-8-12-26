@@ -6,35 +6,65 @@ import html2pdf from 'html2pdf.js';
  * Supports direct crisp PDF rendering across deployments and safe browser printing.
  */
 
-// Helper canvas context to convert any CSS color string (including oklch) to rgb/hex
-const colorCanvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
-if (colorCanvas) {
-  colorCanvas.width = 1;
-  colorCanvas.height = 1;
-}
-const colorCtx = colorCanvas ? colorCanvas.getContext('2d') : null;
-
 /**
- * Converts any oklch(...) color string to a safe hex/rgb color string supported by html2canvas.
+ * Mathematically parses and converts any CSS oklch(L C H [/ A]) string to sRGB rgb(r, g, b) / rgba(r, g, b, a).
+ * Compliant with W3C CSS Color Module 4 standard.
  */
-function convertCssColor(colorStr: string): string {
-  if (!colorStr || typeof colorStr !== 'string' || !colorStr.includes('oklch')) return colorStr;
-
-  // Try parsing oklch lightness value: e.g. oklch(0.98 0.01 200) or oklch(98% ...)
-  const match = colorStr.match(/oklch\(\s*([\d.%]+)/i);
-  if (match) {
-    let lVal = parseFloat(match[1]);
-    if (match[1].endsWith('%')) {
-      lVal = lVal / 100;
-    }
-    // High lightness (>=0.7) -> light gray/white background
-    if (lVal >= 0.8) return '#f8fafc';
-    if (lVal >= 0.6) return '#e2e8f0';
-    if (lVal >= 0.4) return '#475569';
-    return '#000000'; // dark text
+function parseOklchToRgb(colorStr: string): string {
+  if (!colorStr || typeof colorStr !== 'string' || !colorStr.includes('oklch')) {
+    return colorStr;
   }
 
-  return '#ffffff'; // Safe light background fallback
+  const regex = /oklch\(\s*([\d.%]+)\s+([\d.%]+)\s+([\d.%]+)(?:\s*\/\s*([\d.%]+))?\s*\)/gi;
+  return colorStr.replace(regex, (_match, lRaw, cRaw, hRaw, aRaw) => {
+    let L = parseFloat(lRaw);
+    if (lRaw.endsWith('%')) L /= 100;
+    let C = parseFloat(cRaw);
+    if (cRaw.endsWith('%')) C /= 100;
+    let H = parseFloat(hRaw);
+    if (isNaN(H)) H = 0;
+
+    let A = 1;
+    if (aRaw) {
+      A = parseFloat(aRaw);
+      if (aRaw.endsWith('%')) A /= 100;
+    }
+
+    // OKLCH to OKLab
+    const hRad = (H * Math.PI) / 180;
+    const aLab = C * Math.cos(hRad);
+    const bLab = C * Math.sin(hRad);
+
+    // OKLab to LMS (cube)
+    const l_ = L + 0.3963377774 * aLab + 0.2158037573 * bLab;
+    const m_ = L - 0.1055613458 * aLab - 0.0638541728 * bLab;
+    const s_ = L - 0.0894841775 * aLab - 1.291485548 * bLab;
+
+    const l = l_ * l_ * l_;
+    const m = m_ * m_ * m_;
+    const s = s_ * s_ * s_;
+
+    // LMS to Linear sRGB
+    const rLin = +4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s;
+    const gLin = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
+    const bLin = -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s;
+
+    // Linear sRGB to standard sRGB gamma
+    const toSrgb = (c: number) => {
+      const clamped = Math.max(0, Math.min(1, c));
+      const val = clamped <= 0.0031308 ? 12.92 * clamped : 1.055 * Math.pow(clamped, 1 / 2.4) - 0.055;
+      return Math.round(Math.max(0, Math.min(255, val * 255)));
+    };
+
+    const r = toSrgb(rLin);
+    const g = toSrgb(gLin);
+    const b = toSrgb(bLin);
+
+    if (A < 1) {
+      return `rgba(${r}, ${g}, ${b}, ${A.toFixed(2)})`;
+    }
+    return `rgb(${r}, ${g}, ${b})`;
+  });
 }
 
 /**
@@ -45,7 +75,7 @@ function sanitizeDocColors(doc: Document) {
   const styleTags = doc.querySelectorAll('style');
   styleTags.forEach((styleTag) => {
     if (styleTag.textContent && styleTag.textContent.includes('oklch')) {
-      styleTag.textContent = styleTag.textContent.replace(/oklch\([^)]+\)/gi, (match) => convertCssColor(match));
+      styleTag.textContent = parseOklchToRgb(styleTag.textContent);
     }
   });
 
@@ -54,8 +84,19 @@ function sanitizeDocColors(doc: Document) {
   allNodes.forEach((node) => {
     const styleAttr = node.getAttribute('style');
     if (styleAttr && styleAttr.includes('oklch')) {
-      const fixedAttr = styleAttr.replace(/oklch\([^)]+\)/gi, (match) => convertCssColor(match));
+      const fixedAttr = parseOklchToRgb(styleAttr);
       node.setAttribute('style', fixedAttr);
+    }
+    if (node.style) {
+      if (node.style.color && node.style.color.includes('oklch')) {
+        node.style.color = parseOklchToRgb(node.style.color);
+      }
+      if (node.style.backgroundColor && node.style.backgroundColor.includes('oklch')) {
+        node.style.backgroundColor = parseOklchToRgb(node.style.backgroundColor);
+      }
+      if (node.style.borderColor && node.style.borderColor.includes('oklch')) {
+        node.style.borderColor = parseOklchToRgb(node.style.borderColor);
+      }
     }
   });
 }
@@ -77,85 +118,125 @@ function prepareCloneForOutput(clone: HTMLElement) {
   clone.style.margin = '0 auto';
   clone.style.boxSizing = 'border-box';
 
-  // Transform dark classes to crisp light mode
-  const children = clone.querySelectorAll<HTMLElement>('*');
-  children.forEach((child) => {
-    const tagName = child.tagName.toLowerCase();
-    const isDarkHeaderOrCard =
-      tagName === 'th' ||
-      child.classList.contains('bg-slate-900') ||
-      child.classList.contains('bg-slate-950') ||
-      child.classList.contains('bg-slate-800') ||
-      child.classList.contains('bg-slate-850') ||
-      child.classList.contains('bg-slate-700') ||
-      child.classList.contains('bg-slate-50') ||
-      child.classList.contains('bg-slate-100');
+  const isFinancialOrExpenseReport =
+    clone.id === 'printable-full-financial-report' ||
+    clone.id === 'printable-operating-expenses-report' ||
+    clone.classList.contains('printable-financial-report');
 
-    // Remove dark background & text Tailwind classes
-    child.classList.remove(
-      'bg-slate-900',
-      'bg-slate-950',
-      'bg-slate-800',
-      'bg-slate-850',
-      'bg-slate-700',
-      'bg-slate-900/50',
-      'bg-slate-950/70',
-      'bg-slate-950/80',
-      'text-white',
-      'text-slate-100',
-      'text-slate-200',
-      'text-slate-300',
-      'text-slate-400'
-    );
+  if (isFinancialOrExpenseReport) {
+    // For financial reports, match exact preview: white background with dark header & KPI cards, and colored metric text.
+    const children = clone.querySelectorAll<HTMLElement>('*');
+    children.forEach((child) => {
+      // Keep dark banner & summary cards
+      if (child.classList.contains('bg-slate-900') || child.classList.contains('bg-slate-950')) {
+        child.style.backgroundColor = '#0f172a';
+        child.style.color = '#ffffff';
+      }
+      // Keep light table headers
+      if (child.classList.contains('bg-slate-100') || child.style.backgroundColor === 'rgb(241, 245, 249)') {
+        child.style.backgroundColor = '#f1f5f9';
+        child.style.color = '#0f172a';
+      }
+      // Ensure crisp borders
+      if (child.classList.contains('border-slate-900')) {
+        child.style.borderColor = '#0f172a';
+      } else if (child.classList.contains('border-slate-300') || child.classList.contains('border-slate-400')) {
+        child.style.borderColor = '#cbd5e1';
+      }
+      // Keep exact vibrant status & KPI metrics
+      if (child.classList.contains('text-emerald-400') || child.classList.contains('text-emerald-500')) {
+        child.style.color = '#10b981';
+      } else if (child.classList.contains('text-rose-400') || child.classList.contains('text-rose-500') || child.classList.contains('text-rose-700')) {
+        child.style.color = '#f43f5e';
+      } else if (child.classList.contains('text-amber-400') || child.classList.contains('text-amber-500')) {
+        child.style.color = '#f59e0b';
+      } else if (child.classList.contains('text-sky-400') || child.classList.contains('text-sky-500')) {
+        child.style.color = '#0284c7';
+      } else if (child.classList.contains('text-purple-400')) {
+        child.style.color = '#a855f7';
+      }
+    });
+  } else {
+    // Transform dark classes to crisp light mode
+    const children = clone.querySelectorAll<HTMLElement>('*');
+    children.forEach((child) => {
+      const tagName = child.tagName.toLowerCase();
+      const isDarkHeaderOrCard =
+        tagName === 'th' ||
+        child.classList.contains('bg-slate-900') ||
+        child.classList.contains('bg-slate-950') ||
+        child.classList.contains('bg-slate-800') ||
+        child.classList.contains('bg-slate-850') ||
+        child.classList.contains('bg-slate-700') ||
+        child.classList.contains('bg-slate-50') ||
+        child.classList.contains('bg-slate-100');
 
-    // Apply inline light backgrounds for cards/headers
-    if (isDarkHeaderOrCard) {
-      child.style.backgroundColor = '#f8fafc';
-    }
+      // Remove dark background & text Tailwind classes
+      child.classList.remove(
+        'bg-slate-900',
+        'bg-slate-950',
+        'bg-slate-800',
+        'bg-slate-850',
+        'bg-slate-700',
+        'bg-slate-900/50',
+        'bg-slate-950/70',
+        'bg-slate-950/80',
+        'text-white',
+        'text-slate-100',
+        'text-slate-200',
+        'text-slate-300',
+        'text-slate-400'
+      );
 
-    // Set border colors
-    if (
-      child.classList.contains('border') ||
-      child.classList.contains('border-b') ||
-      child.classList.contains('border-t') ||
-      child.classList.contains('border-slate-800') ||
-      child.classList.contains('border-slate-700') ||
-      child.classList.contains('border-slate-400') ||
-      child.classList.contains('border-slate-300')
-    ) {
-      child.style.borderColor = '#cbd5e1';
-    }
+      // Apply inline light backgrounds for cards/headers
+      if (isDarkHeaderOrCard) {
+        child.style.backgroundColor = '#f8fafc';
+      }
 
-    // Keep crisp text colors
-    if (
-      child.classList.contains('text-rose-700') ||
-      child.classList.contains('text-rose-600') ||
-      child.classList.contains('text-rose-500') ||
-      child.classList.contains('text-rose-400')
-    ) {
-      child.style.color = '#be123c';
-    } else if (
-      child.classList.contains('text-emerald-700') ||
-      child.classList.contains('text-emerald-600') ||
-      child.classList.contains('text-emerald-500') ||
-      child.classList.contains('text-emerald-400')
-    ) {
-      child.style.color = '#047857';
-    } else if (
-      child.classList.contains('text-amber-700') ||
-      child.classList.contains('text-amber-600') ||
-      child.classList.contains('text-amber-500') ||
-      child.classList.contains('text-amber-400')
-    ) {
-      child.style.color = '#b45309';
-    } else if (child.classList.contains('text-slate-600') || child.classList.contains('text-slate-500')) {
-      child.style.color = '#475569';
-    } else if (child.classList.contains('text-slate-400')) {
-      child.style.color = '#64748b';
-    } else if (!child.classList.contains('text-emerald-400') && !child.classList.contains('text-rose-400')) {
-      child.style.color = '#0f172a';
-    }
-  });
+      // Set border colors
+      if (
+        child.classList.contains('border') ||
+        child.classList.contains('border-b') ||
+        child.classList.contains('border-t') ||
+        child.classList.contains('border-slate-800') ||
+        child.classList.contains('border-slate-700') ||
+        child.classList.contains('border-slate-400') ||
+        child.classList.contains('border-slate-300')
+      ) {
+        child.style.borderColor = '#cbd5e1';
+      }
+
+      // Keep crisp text colors
+      if (
+        child.classList.contains('text-rose-700') ||
+        child.classList.contains('text-rose-600') ||
+        child.classList.contains('text-rose-500') ||
+        child.classList.contains('text-rose-400')
+      ) {
+        child.style.color = '#be123c';
+      } else if (
+        child.classList.contains('text-emerald-700') ||
+        child.classList.contains('text-emerald-600') ||
+        child.classList.contains('text-emerald-500') ||
+        child.classList.contains('text-emerald-400')
+      ) {
+        child.style.color = '#047857';
+      } else if (
+        child.classList.contains('text-amber-700') ||
+        child.classList.contains('text-amber-600') ||
+        child.classList.contains('text-amber-500') ||
+        child.classList.contains('text-amber-400')
+      ) {
+        child.style.color = '#b45309';
+      } else if (child.classList.contains('text-slate-600') || child.classList.contains('text-slate-500')) {
+        child.style.color = '#475569';
+      } else if (child.classList.contains('text-slate-400')) {
+        child.style.color = '#64748b';
+      } else if (!child.classList.contains('text-emerald-400') && !child.classList.contains('text-rose-400')) {
+        child.style.color = '#0f172a';
+      }
+    });
+  }
 }
 
 /**
@@ -181,6 +262,10 @@ function getEmbeddedPrintStyles(): string {
       font-family: 'Hind Siliguri', 'SolaimanLipi', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif !important;
       font-size: 12px !important;
       line-height: 1.5 !important;
+    }
+
+    body * {
+      visibility: visible !important;
     }
 
     .print-outer-container {
@@ -213,6 +298,10 @@ function getEmbeddedPrintStyles(): string {
     .grid { display: grid !important; }
     .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)) !important; }
     .grid-cols-2, .sm\\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    .grid-cols-3, .sm\\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+    .grid-cols-4, .sm\\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+    .grid-cols-5, .sm\\:grid-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
+    .grid-cols-6, .sm\\:grid-cols-6 { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; }
     .gap-1 { gap: 4px !important; }
     .gap-1\\.5 { gap: 6px !important; }
     .gap-2 { gap: 8px !important; }
@@ -305,29 +394,50 @@ function getEmbeddedPrintStyles(): string {
     .border-slate-200, .border-slate-300, .border-slate-400, .border-slate-700, .border-slate-800 {
       border-color: #cbd5e1 !important;
     }
+    .border-slate-900 {
+      border-color: #0f172a !important;
+    }
     .divide-y > * + * {
       border-top: 1px solid #e2e8f0 !important;
     }
 
     /* Backgrounds & Text Colors */
     .bg-white { background-color: #ffffff !important; }
-    .bg-slate-50, .bg-slate-100, .bg-slate-800, .bg-slate-900, .bg-slate-950, .bg-slate-950\\/80 {
-      background-color: #f8fafc !important;
+    .bg-slate-50, .bg-slate-100 {
+      background-color: #f1f5f9 !important;
     }
-    .text-slate-900, .text-slate-800, .text-slate-700, .text-slate-100, .text-slate-200, .text-slate-300 {
+    .bg-slate-800, .bg-slate-900, .bg-slate-950, .bg-slate-950\\/80 {
+      background-color: #0f172a !important;
+      color: #ffffff !important;
+    }
+    .text-slate-900, .text-slate-800, .text-slate-700 {
       color: #0f172a !important;
     }
-    .text-slate-600, .text-slate-500, .text-slate-400 {
+    .text-slate-600, .text-slate-500 {
       color: #475569 !important;
     }
+    .text-slate-400 {
+      color: #64748b !important;
+    }
+    .text-slate-100, .text-slate-200, .text-slate-300, .text-white {
+      color: #ffffff !important;
+    }
+
+    /* Metric & Category Status Colors */
     .text-emerald-400, .text-emerald-500, .text-emerald-600, .text-emerald-700 {
-      color: #047857 !important;
+      color: #10b981 !important;
     }
     .text-rose-400, .text-rose-500, .text-rose-600, .text-rose-700 {
-      color: #be123c !important;
+      color: #f43f5e !important;
     }
     .text-amber-400, .text-amber-500, .text-amber-600, .text-amber-700 {
-      color: #b45309 !important;
+      color: #f59e0b !important;
+    }
+    .text-sky-400, .text-sky-500, .text-sky-600, .text-sky-700 {
+      color: #0284c7 !important;
+    }
+    .text-purple-400 {
+      color: #a855f7 !important;
     }
 
     /* Badges */
@@ -389,13 +499,23 @@ function getEmbeddedPrintStyles(): string {
       box-sizing: border-box !important;
       box-shadow: none !important;
     }
+
+    /* Preserve dark banners inside financial reports in print */
+    .printable-financial-report .bg-slate-900,
+    .printable-financial-report .bg-slate-950 {
+      background-color: #0f172a !important;
+      color: #ffffff !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .printable-financial-report .border-slate-900 {
+      border-color: #0f172a !important;
+    }
   `;
 }
 
 /**
- * Prints a specific HTML element cleanly in a dedicated printable iframe.
- * Preserves the exact on-screen preview layout, grids, flexboxes, borders, and colors
- * across desktop and mobile browsers (including Android Print Spooler).
+ * Directly invokes system print dialog via an isolated, fully styled iframe.
  */
 export const printElementDirectly = (elementId: string, title?: string) => {
   const element = document.getElementById(elementId);
@@ -406,17 +526,11 @@ export const printElementDirectly = (elementId: string, title?: string) => {
   }
 
   try {
-    // 1. Clone element and transform to crisp light mode
+    // 1. Clone element and prepare layout matching preview
     const clone = element.cloneNode(true) as HTMLElement;
     prepareCloneForOutput(clone);
 
-    // 2. Collect existing stylesheets & fonts from main document
-    let parentStyles = '';
-    document.querySelectorAll('style, link[rel="stylesheet"]').forEach((el) => {
-      parentStyles += el.outerHTML + '\n';
-    });
-
-    // 3. Create an isolated iframe configured so mobile Print Spoolers don't clip it
+    // 2. Create an isolated iframe
     const iframe = document.createElement('iframe');
     iframe.style.position = 'fixed';
     iframe.style.top = '0';
@@ -425,7 +539,7 @@ export const printElementDirectly = (elementId: string, title?: string) => {
     iframe.style.height = '100%';
     iframe.style.border = 'none';
     iframe.style.zIndex = '-99999';
-    iframe.style.opacity = '0.01'; // Visible to print engines, transparent to user
+    iframe.style.opacity = '0.01';
     iframe.style.pointerEvents = 'none';
 
     document.body.appendChild(iframe);
@@ -443,11 +557,10 @@ export const printElementDirectly = (elementId: string, title?: string) => {
         <head>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>${title || 'Memo Print'}</title>
+          <title>${title || 'Print Document'}</title>
           <link rel="preconnect" href="https://fonts.googleapis.com">
           <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
           <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-          ${parentStyles}
           <style>
             ${getEmbeddedPrintStyles()}
           </style>
@@ -486,16 +599,19 @@ export const printElementDirectly = (elementId: string, title?: string) => {
   }
 };
 
+/**
+ * Displays feedback toast during PDF compilation & download.
+ */
 function showPdfToast(status: 'loading' | 'success' | 'error', message?: string) {
   if (typeof document === 'undefined') return;
-  let toastEl = document.getElementById('pdf-generation-status-toast');
+  let toastEl = document.getElementById('pdf-download-toast');
   if (!toastEl) {
     toastEl = document.createElement('div');
-    toastEl.id = 'pdf-generation-status-toast';
+    toastEl.id = 'pdf-download-toast';
     toastEl.style.position = 'fixed';
     toastEl.style.bottom = '24px';
     toastEl.style.right = '24px';
-    toastEl.style.zIndex = '99999';
+    toastEl.style.zIndex = '999999';
     toastEl.style.transition = 'all 0.3s ease';
     document.body.appendChild(toastEl);
   }
@@ -505,8 +621,8 @@ function showPdfToast(status: 'loading' | 'success' | 'error', message?: string)
       <div style="display:flex;align-items:center;gap:12px;background:#0f172a;color:#f8fafc;padding:12px 20px;border-radius:10px;box-shadow:0 10px 25px rgba(0,0,0,0.5);border:1px solid #334155;font-family:sans-serif;font-size:14px;">
         <div style="width:18px;height:18px;border:2px solid #38bdf8;border-top-color:transparent;border-radius:50%;animation:spinPdf 1s linear infinite;"></div>
         <div>
-          <div style="font-weight:600;color:#38bdf8;">Generating Invoice PDF...</div>
-          <div style="font-size:12px;color:#94a3b8;">Please wait...</div>
+          <div style="font-weight:600;color:#38bdf8;">${message || 'PDF তৈরি হচ্ছে (Generating PDF)...'}</div>
+          <div style="font-size:12px;color:#94a3b8;">অনুগ্রহ করে অপেক্ষা করুন...</div>
         </div>
       </div>
       <style>@keyframes spinPdf { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
@@ -517,8 +633,8 @@ function showPdfToast(status: 'loading' | 'success' | 'error', message?: string)
       <div style="display:flex;align-items:center;gap:12px;background:#450a0a;color:#fecaca;padding:12px 20px;border-radius:10px;box-shadow:0 10px 25px rgba(0,0,0,0.5);border:1px solid #dc2626;font-family:sans-serif;font-size:14px;">
         <span style="font-size:18px;">⚠️</span>
         <div>
-          <div style="font-weight:600;color:#f87171;">ত্রুটি (Error)</div>
-          <div style="font-size:12px;color:#fca5a5;">${message || 'Invoice PDF তৈরি করা সম্ভব হয়নি। আবার চেষ্টা করুন।'}</div>
+          <div style="font-weight:600;color:#f87171;">প্রিন্ট নোটিফিকেশন</div>
+          <div style="font-size:12px;color:#fca5a5;">${message || 'সরাসরি PDF ডাউনলোড করা সম্ভব হয়নি। প্রিন্ট ডায়ালগ ওপেন করা হয়েছে...'}</div>
         </div>
       </div>
     `;
@@ -543,7 +659,7 @@ export const downloadElementAsPDF = async (elementId: string, filename: string):
   const element = document.getElementById(elementId);
   if (!element) {
     console.error(`Element #${elementId} not found.`);
-    showPdfToast('error', 'Invoice PDF তৈরি করা সম্ভব হয়নি। আবার চেষ্টা করুন।');
+    showPdfToast('error', 'ডকুমেন্ট খুঁজে পাওয়া যায়নি। আবার চেষ্টা করুন।');
     return false;
   }
 
@@ -561,6 +677,16 @@ export const downloadElementAsPDF = async (elementId: string, filename: string):
       logging: false,
       letterRendering: true,
       onclone: (clonedDoc: Document) => {
+        // 1. Remove all external stylesheets to eliminate oklch rules that crash html2canvas
+        const styles = clonedDoc.querySelectorAll('style, link[rel="stylesheet"]');
+        styles.forEach((s) => s.remove());
+
+        // 2. Inject standalone CSS stylesheet with pure hex/rgb colors
+        const newStyle = clonedDoc.createElement('style');
+        newStyle.textContent = getEmbeddedPrintStyles();
+        clonedDoc.head.appendChild(newStyle);
+
+        // 3. Mathematical OKLCH sanitizer on all cloned DOM elements
         sanitizeDocColors(clonedDoc);
       },
     },
@@ -572,87 +698,15 @@ export const downloadElementAsPDF = async (elementId: string, filename: string):
   try {
     // Clone element for PDF generation
     const clone = element.cloneNode(true) as HTMLElement;
-
-    // Remove no-print elements from clone
-    const noPrintElements = clone.querySelectorAll('.no-print');
-    noPrintElements.forEach((el) => el.remove());
-
-    // Apply print-friendly light styling to clone root
-    clone.style.backgroundColor = '#ffffff';
-    clone.style.color = '#000000';
-    clone.style.padding = '16px';
-    clone.style.fontFamily = "'Hind Siliguri', 'SolaimanLipi', 'Plus Jakarta Sans', sans-serif";
-    clone.style.width = '750px';
-
-    // Transform dark classes to crisp light mode inside PDF clone
-    const children = clone.querySelectorAll<HTMLElement>('*');
-    children.forEach((child) => {
-      const tagName = child.tagName.toLowerCase();
-      const isDarkHeaderOrCard =
-        tagName === 'th' ||
-        child.classList.contains('bg-slate-900') ||
-        child.classList.contains('bg-slate-950') ||
-        child.classList.contains('bg-slate-800') ||
-        child.classList.contains('bg-slate-850') ||
-        child.classList.contains('bg-slate-700') ||
-        child.classList.contains('bg-slate-50') ||
-        child.classList.contains('bg-slate-100');
-
-      // 1. Strip dark background & text Tailwind classes
-      child.classList.remove(
-        'bg-slate-900',
-        'bg-slate-950',
-        'bg-slate-800',
-        'bg-slate-850',
-        'bg-slate-700',
-        'bg-slate-900/50',
-        'bg-slate-950/70',
-        'bg-slate-950/80',
-        'text-white',
-        'text-slate-100',
-        'text-slate-200',
-        'text-slate-300',
-        'text-slate-400'
-      );
-
-      // 2. Set background color to light gray for headers/summary cards or white for body
-      if (isDarkHeaderOrCard) {
-        child.style.backgroundColor = '#f8fafc';
-      } else {
-        child.style.backgroundColor = '#ffffff';
-      }
-
-      // 3. Keep crisp black text unless it's a specific colored metric
-      if (
-        !child.classList.contains('text-rose-700') &&
-        !child.classList.contains('text-rose-600') &&
-        !child.classList.contains('text-rose-400') &&
-        !child.classList.contains('text-emerald-700') &&
-        !child.classList.contains('text-emerald-600') &&
-        !child.classList.contains('text-emerald-400') &&
-        !child.classList.contains('text-sky-700') &&
-        !child.classList.contains('text-amber-400')
-      ) {
-        child.style.color = '#000000';
-      } else if (child.classList.contains('text-emerald-400') || child.classList.contains('text-emerald-600')) {
-        child.style.color = '#047857';
-      } else if (child.classList.contains('text-rose-400') || child.classList.contains('text-rose-600')) {
-        child.style.color = '#be123c';
-      } else if (child.classList.contains('text-amber-400')) {
-        child.style.color = '#b45309';
-      }
-
-      // 4. Force thin light border
-      child.style.borderColor = '#cbd5e1';
-    });
+    prepareCloneForOutput(clone);
 
     wrapper = document.createElement('div');
     wrapper.style.position = 'fixed';
-    wrapper.style.top = '0';
+    wrapper.style.top = '-99999px';
     wrapper.style.left = '0';
     wrapper.style.width = '794px'; // Standard A4 width in pixels at 96 DPI
-    wrapper.style.zIndex = '-9999';
-    wrapper.style.opacity = '0.01';
+    wrapper.style.zIndex = '-99999';
+    wrapper.style.opacity = '1';
     wrapper.style.pointerEvents = 'none';
     wrapper.style.overflow = 'visible';
     wrapper.style.backgroundColor = '#ffffff';
@@ -664,7 +718,7 @@ export const downloadElementAsPDF = async (elementId: string, filename: string):
     return true;
   } catch (err) {
     console.error('PDF export error:', err);
-    showPdfToast('error', 'Invoice PDF তৈরি করা সম্ভব হয়নি। আবার চেষ্টা করুন।');
+    showPdfToast('error', 'সরাসরি PDF ডাউনলোড করা সম্ভব হয়নি। প্রিন্ট ডায়ালগ ওপেন করা হয়েছে...');
     // Fallback to direct print if PDF generation was interrupted
     printElementDirectly(elementId, cleanFilename);
     return false;
@@ -674,3 +728,4 @@ export const downloadElementAsPDF = async (elementId: string, filename: string):
     }
   }
 };
+

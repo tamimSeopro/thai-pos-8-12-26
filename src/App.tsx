@@ -48,7 +48,7 @@ const MainLayout: React.FC = () => {
       case 'backup_reset':
         return <BackupResetScreen />;
       case 'super_admin_stores':
-        return <SuperAdminStoresScreen />;
+        return <SuperAdminStoresScreen onNavigate={handleSelectScreen} />;
       default:
         return <DashboardScreen onNavigate={handleSelectScreen} />;
     }

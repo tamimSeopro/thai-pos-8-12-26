@@ -475,6 +475,7 @@ export const api = {
 
   // PRODUCTS (/api/products)
   async getProducts(storeId: string): Promise<Product[]> {
+    if (!storeId) return [];
     const all = getStored<Product[]>(STORAGE_KEYS.PRODUCTS, INITIAL_PRODUCTS);
     return all.filter((p) => p.storeId === storeId);
   },
@@ -526,6 +527,7 @@ export const api = {
 
   // INVOICES (/api/invoices)
   async getInvoices(storeId: string): Promise<Invoice[]> {
+    if (!storeId) return [];
     const all = getStored<Invoice[]>(STORAGE_KEYS.INVOICES, INITIAL_INVOICES);
     return all.filter((inv) => inv.storeId === storeId);
   },
@@ -642,12 +644,14 @@ export const api = {
 
   // TRANSACTIONS (/api/transactions)
   async getTransactions(storeId: string): Promise<Transaction[]> {
+    if (!storeId) return [];
     const all = getStored<Transaction[]>(STORAGE_KEYS.TRANSACTIONS, INITIAL_TRANSACTIONS);
     return all.filter((tx) => tx.storeId === storeId);
   },
 
   // CUSTOMERS (/api/customers)
   async getCustomers(storeId: string): Promise<Customer[]> {
+    if (!storeId) return [];
     const all = getStored<Customer[]>(STORAGE_KEYS.CUSTOMERS, INITIAL_CUSTOMERS);
     return all.filter((c) => c.storeId === storeId);
   },
@@ -724,6 +728,7 @@ export const api = {
 
   // STOCK ARRIVALS (/api/stock-arrivals)
   async getStockArrivals(storeId: string): Promise<StockArrival[]> {
+    if (!storeId) return [];
     const all = getStored<StockArrival[]>(STORAGE_KEYS.STOCK_ARRIVALS, INITIAL_STOCK_ARRIVALS);
     return all.filter((a) => a.storeId === storeId);
   },
@@ -783,6 +788,7 @@ export const api = {
 
   // EXPENSES (/api/expenses)
   async getExpenses(storeId: string): Promise<Expense[]> {
+    if (!storeId) return [];
     const all = getStored<Expense[]>(STORAGE_KEYS.EXPENSES, INITIAL_EXPENSES);
     return all.filter((e) => e.storeId === storeId);
   },
@@ -913,22 +919,26 @@ export const api = {
   },
 
   async resetAllStoreData(storeId: string) {
+    if (!storeId) return;
     let products = getStored<Product[]>(STORAGE_KEYS.PRODUCTS, INITIAL_PRODUCTS);
     let invoices = getStored<Invoice[]>(STORAGE_KEYS.INVOICES, INITIAL_INVOICES);
     let customers = getStored<Customer[]>(STORAGE_KEYS.CUSTOMERS, INITIAL_CUSTOMERS);
     let arrivals = getStored<StockArrival[]>(STORAGE_KEYS.STOCK_ARRIVALS, INITIAL_STOCK_ARRIVALS);
     let expenses = getStored<Expense[]>(STORAGE_KEYS.EXPENSES, INITIAL_EXPENSES);
+    let transactions = getStored<Transaction[]>(STORAGE_KEYS.TRANSACTIONS, INITIAL_TRANSACTIONS);
 
     products = products.filter((p) => p.storeId !== storeId);
     invoices = invoices.filter((i) => i.storeId !== storeId);
     customers = customers.filter((c) => c.storeId !== storeId);
     arrivals = arrivals.filter((a) => a.storeId !== storeId);
     expenses = expenses.filter((e) => e.storeId !== storeId);
+    transactions = transactions.filter((t) => t.storeId !== storeId);
 
     setStored(STORAGE_KEYS.PRODUCTS, products);
     setStored(STORAGE_KEYS.INVOICES, invoices);
     setStored(STORAGE_KEYS.CUSTOMERS, customers);
     setStored(STORAGE_KEYS.STOCK_ARRIVALS, arrivals);
     setStored(STORAGE_KEYS.EXPENSES, expenses);
+    setStored(STORAGE_KEYS.TRANSACTIONS, transactions);
   },
 };

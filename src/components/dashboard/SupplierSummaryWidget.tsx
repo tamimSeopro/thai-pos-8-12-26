@@ -10,15 +10,18 @@ interface SupplierSummaryWidgetProps {
 }
 
 export const SupplierSummaryWidget: React.FC<SupplierSummaryWidgetProps> = ({
-  stockArrivals,
-  transactions,
+  stockArrivals = [],
+  transactions = [],
   onViewInventory,
 }) => {
+  const safeArrivals = Array.isArray(stockArrivals) ? stockArrivals : [];
+  const safeTransactions = Array.isArray(transactions) ? transactions : [];
+
   // Total purchases this month
   const now = new Date();
   const currentMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-  const monthPurchases = stockArrivals.filter((a) =>
+  const monthPurchases = safeArrivals.filter((a) =>
     (a.date || '').startsWith(currentMonthPrefix)
   );
   const totalMonthPurchaseAmount = monthPurchases.reduce(
@@ -27,15 +30,15 @@ export const SupplierSummaryWidget: React.FC<SupplierSummaryWidgetProps> = ({
   );
 
   // Supplier payments recorded
-  const supplierPayments = transactions
+  const supplierPayments = safeTransactions
     .filter((t) => t.type === 'purchase')
     .reduce((sum, t) => sum + (t.amount || 0), 0);
 
   // Pending supplier payments (approx total purchases minus payments)
-  const totalAllPurchases = stockArrivals.reduce((sum, a) => sum + (a.totalCost || 0), 0);
+  const totalAllPurchases = safeArrivals.reduce((sum, a) => sum + (a.totalCost || 0), 0);
   const pendingSupplierPayments = Math.max(0, totalAllPurchases - supplierPayments);
 
-  const recentPurchases = stockArrivals.slice(0, 4);
+  const recentPurchases = safeArrivals.slice(0, 4);
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl shadow-slate-950/40 space-y-4">
